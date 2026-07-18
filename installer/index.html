@@ -36,7 +36,6 @@
         <a href="#installer">安裝</a>
         <a href="#operation">基本操作</a>
         <a href="#setup">首次設定</a>
-        <a href="#help">疑難排解</a>
       </nav>
       <a
         class="source-link"
@@ -60,28 +59,25 @@
           </div>
         </div>
 
-        <aside class="compatibility-preview" aria-label="目前選擇的裝置">
-          <div class="preview-heading">
-            <span>目前選擇</span>
-            <strong id="hero-device-status">正式支援</strong>
+        <figure class="device-demo" id="hero-device-figure">
+          <div class="device-demo-stage">
+            <img
+              id="hero-device-image"
+              src="./assets/zectrix-note4-demo.png?v=ab2a968a"
+                    width="850"
+                    height="850"
+              alt="顯示 TransitInk OS 交通資訊的 Zectrix Note 4 裝置產品圖"
+              fetchpriority="high"
+            >
           </div>
-          <p class="preview-device" id="hero-device-name">Zectrix Note 4</p>
-          <dl class="device-facts">
+          <figcaption>
             <div>
-              <dt>處理器</dt>
-              <dd id="hero-chip-family">ESP32-S3</dd>
+              <span>Demo 裝置</span>
+              <strong id="hero-device-name">Zectrix Note 4</strong>
             </div>
-            <div>
-              <dt>顯示器</dt>
-              <dd id="hero-display">400 × 300 電子紙</dd>
-            </div>
-            <div>
-              <dt>連接方式</dt>
-              <dd id="hero-connection">USB-C 數據線</dd>
-            </div>
-          </dl>
-          <p class="preview-note">裝置資料由版本化清單提供，可隨新增硬件擴充。</p>
-        </aside>
+            <span class="demo-support" id="hero-device-status">正式支援</span>
+          </figcaption>
+        </figure>
       </section>
 
       <section class="installer-section shell" id="installer" aria-labelledby="installer-title">
@@ -130,10 +126,6 @@
               <span>韌體版本</span>
               <strong id="firmware-version">正在讀取</strong>
             </div>
-
-            <p class="erase-warning">
-              安裝會覆蓋現有韌體並清除裝置設定。請先記下 Wi-Fi 和小工具設定。
-            </p>
           </div>
 
           <aside class="preflight" aria-labelledby="preflight-title">
@@ -143,9 +135,6 @@
               <li>關閉其他正在使用序列連接埠的程式。</li>
               <li>確認裝置型號與上方選擇完全相同。</li>
             </ul>
-            <p class="device-specific-note" id="device-install-note">
-              如未能找到連接埠，按住 BOOT 鍵再重新接上 USB。
-            </p>
           </aside>
         </div>
       </section>
@@ -254,33 +243,6 @@
         </div>
       </section>
 
-      <section class="help-section shell" id="help" aria-labelledby="help-title">
-        <div class="section-intro compact-intro">
-          <h2 id="help-title">疑難排解</h2>
-          <p>遇到問題時，可保留現有頁面並逐項檢查。</p>
-        </div>
-        <div class="help-list">
-          <details>
-            <summary>找不到裝置或連接埠</summary>
-            <p>更換可傳輸資料的 USB 線或連接埠，然後按住 BOOT 鍵重新連接。</p>
-          </details>
-          <details>
-            <summary>安裝途中中斷</summary>
-            <p>重新接上裝置並再次開始安裝。完成前不要關閉分頁或拔除線材。</p>
-          </details>
-          <details>
-            <summary>安裝後沒有顯示設定網絡</summary>
-            <p>重新啟動裝置並等待片刻，再於 Wi-Fi 清單尋找 <code>TransitInk-xxxx</code>。</p>
-          </details>
-          <details>
-            <summary>我的裝置不在清單內</summary>
-            <p>
-              請勿嘗試使用其他型號的韌體。開發者可參閱
-              <a href="https://github.com/wongshingg/transitink-os/blob/main/docs/ADDING_HARDWARE.md">新增硬件指南</a>。
-            </p>
-          </details>
-        </div>
-      </section>
     </main>
 
     <footer class="site-footer shell">

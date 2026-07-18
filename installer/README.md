@@ -1,10 +1,10 @@
 # TransitInk OS web installer
 
 This directory contains the dependency-free static installer source. Device
-compatibility is declared in `devices.json`; the page uses that catalog to select
-the matching ESP Web Tools manifest without hard-coding the interface to one
-board. Add a catalog entry and matching generated manifest when another hardware
-profile is ready for web installation.
+compatibility, product imagery and manifests are declared in `devices.json`; the
+page uses that catalog without hard-coding the interface to one board. Add a
+catalog entry, an image under `assets/`, and a matching generated manifest when
+another hardware profile is ready for web installation.
 
 `manifest.json` and the merged ESP32-S3 firmware image are generated into
 `dist/installer/` by:

@@ -7,12 +7,10 @@ const firmwareVersion = document.querySelector("#firmware-version");
 const fields = {
   heroName: document.querySelector("#hero-device-name"),
   heroStatus: document.querySelector("#hero-device-status"),
-  chipFamily: document.querySelector("#hero-chip-family"),
-  display: document.querySelector("#hero-display"),
-  connection: document.querySelector("#hero-connection"),
+  heroFigure: document.querySelector("#hero-device-figure"),
+  heroImage: document.querySelector("#hero-device-image"),
   selectedName: document.querySelector("#selected-device-name"),
   selectedStatus: document.querySelector("#selected-device-status"),
-  installNote: document.querySelector("#device-install-note"),
 };
 
 let devices = [];
@@ -56,12 +54,16 @@ async function loadVersion(manifestUrl) {
 function applyDevice(device) {
   setText(fields.heroName, device.name);
   setText(fields.heroStatus, device.status_label);
-  setText(fields.chipFamily, device.chip_family);
-  setText(fields.display, device.display);
-  setText(fields.connection, device.connection);
   setText(fields.selectedName, device.name);
   setText(fields.selectedStatus, device.status_label);
-  setText(fields.installNote, device.install_note);
+
+  if (typeof device.image === "string" && device.image) {
+    fields.heroImage.src = device.image;
+    fields.heroImage.alt = device.image_alt || `${device.name} 裝置產品圖`;
+    fields.heroFigure.hidden = false;
+  } else {
+    fields.heroFigure.hidden = true;
+  }
 
   installButton.setAttribute("manifest", device.manifest);
   if (device.installable === false) {
@@ -113,8 +115,9 @@ try {
       chip_family: "ESP32-S3",
       display: "400 × 300 電子紙",
       connection: "USB-C 數據線",
+      image: "./assets/zectrix-note4-demo.png?v=ab2a968a",
+      image_alt: "顯示 TransitInk OS 交通資訊的 Zectrix Note 4 裝置產品圖",
       manifest: "./manifest.json",
-      install_note: "如未能找到連接埠，按住 BOOT 鍵再重新接上 USB。",
       installable: true,
     },
   ];

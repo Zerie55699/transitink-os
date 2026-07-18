@@ -58,6 +58,10 @@ class ReleasePackagingTests(unittest.TestCase):
         self.assertEqual(1, catalog["schema_version"])
         self.assertEqual("zectrix_note4", catalog["devices"][0]["id"])
         self.assertEqual("./manifest.json", catalog["devices"][0]["manifest"])
+        self.assertEqual(
+            "./assets/zectrix-note4-demo.png?v=ab2a968a",
+            catalog["devices"][0]["image"],
+        )
         self.assertTrue(catalog["devices"][0]["installable"])
 
     def test_package_copies_page_and_device_catalog_assets(self):
@@ -80,6 +84,7 @@ class ReleasePackagingTests(unittest.TestCase):
                 "app.js",
                 "devices.json",
                 "manifest.json",
+                "assets/zectrix-note4-demo.png",
             ):
                 self.assertTrue((output / filename).is_file(), filename)
 

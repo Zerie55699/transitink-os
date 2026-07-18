@@ -272,91 +272,65 @@ p {
   background: var(--accent-soft);
 }
 
-.compatibility-preview {
+.device-demo {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+}
+
+.device-demo-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 480px;
   overflow: hidden;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-panel);
   background:
-    linear-gradient(135deg, rgb(255 255 255 / 78%), rgb(229 237 247 / 88%)),
-    var(--surface-strong);
+    radial-gradient(circle at 50% 38%, rgb(255 255 255 / 96%), transparent 52%),
+    linear-gradient(145deg, #dbe4ee, #bdcad8);
   box-shadow: var(--shadow);
 }
 
-.compatibility-preview::before {
-  content: "";
+.device-demo-stage img {
   display: block;
-  height: 8px;
-  background: var(--accent);
+  width: min(96%, 620px);
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 26px 24px rgb(52 69 88 / 20%));
 }
 
-.preview-heading,
-.preview-device,
-.device-facts,
-.preview-note {
-  margin-inline: 28px;
-}
-
-.preview-heading {
+.device-demo figcaption {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  margin-top: 26px;
-  color: var(--ink-muted);
-  font-size: 0.84rem;
+  padding-inline: 4px;
 }
 
-.preview-heading strong {
-  color: var(--accent-ink);
-}
-
-.preview-device {
-  margin-top: 44px;
-  margin-bottom: 48px;
-  color: var(--ink);
-  font-size: clamp(2rem, 4vw, 3.25rem);
-  font-weight: 760;
-  line-height: 1;
-  letter-spacing: -0.045em;
-}
-
-.device-facts {
+.device-demo figcaption > div {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  margin-bottom: 24px;
-  padding-top: 22px;
-  border-top: 1px solid var(--line);
+  gap: 3px;
 }
 
-.device-facts div {
-  min-width: 0;
-  padding-right: 14px;
-}
-
-.device-facts dt {
-  margin-bottom: 7px;
+.device-demo figcaption span {
   color: var(--ink-muted);
-  font-size: 0.73rem;
+  font-size: 0.78rem;
 }
 
-.device-facts dd {
-  margin: 0;
+.device-demo figcaption strong {
   color: var(--ink);
-  font-size: 0.86rem;
-  font-weight: 700;
-  line-height: 1.35;
 }
 
-.preview-note {
-  margin-bottom: 26px;
-  font-size: 0.82rem;
+.device-demo figcaption .demo-support {
+  color: var(--accent-ink);
+  font-weight: 780;
 }
 
 .installer-section,
 .operation-section,
 .setup-section,
-.widgets-section,
-.help-section {
+.widgets-section {
   padding-block: clamp(72px, 10vw, 124px);
 }
 
@@ -516,16 +490,9 @@ esp-web-install-button {
   color: var(--danger);
 }
 
-.erase-warning,
-.inline-message,
-.device-specific-note {
+.inline-message {
   margin-bottom: 0;
   font-size: 0.88rem;
-}
-
-.erase-warning {
-  margin-top: 18px;
-  color: var(--danger);
 }
 
 .inline-message {
@@ -560,11 +527,6 @@ esp-web-install-button {
   left: 0;
   color: var(--accent-ink);
   font-weight: 850;
-}
-
-.device-specific-note {
-  border-top: 1px solid var(--line);
-  padding-top: 20px;
 }
 
 .procedure {
@@ -697,51 +659,6 @@ code {
   font-size: 0.92rem;
 }
 
-.help-list {
-  border-top: 1px solid var(--line-strong);
-}
-
-.help-list details {
-  border-bottom: 1px solid var(--line);
-}
-
-.help-list summary {
-  position: relative;
-  cursor: pointer;
-  list-style: none;
-  padding: 22px 52px 22px 0;
-  color: var(--ink);
-  font-weight: 730;
-}
-
-.help-list summary::-webkit-details-marker {
-  display: none;
-}
-
-.help-list summary::after {
-  content: "+";
-  position: absolute;
-  top: 18px;
-  right: 4px;
-  color: var(--accent);
-  font-size: 1.5rem;
-  font-weight: 500;
-}
-
-.help-list details[open] summary::after {
-  content: "−";
-}
-
-.help-list details p {
-  max-width: 66ch;
-  margin-bottom: 24px;
-}
-
-.help-list details a {
-  color: var(--accent-ink);
-  font-weight: 700;
-}
-
 .site-footer {
   display: flex;
   align-items: end;
@@ -785,7 +702,7 @@ code {
     max-width: 15ch;
   }
 
-  .compatibility-preview {
+  .device-demo {
     max-width: 620px;
   }
 
@@ -815,12 +732,13 @@ code {
   }
 
   .hero {
-    min-height: calc(100dvh - 62px);
-    padding-block: 52px;
+    gap: 32px;
+    min-height: auto;
+    padding-block: 48px;
   }
 
-  .compatibility-preview {
-    display: none;
+  .device-demo-stage {
+    min-height: 300px;
   }
 
   h1 {
@@ -835,27 +753,8 @@ code {
     width: 100%;
   }
 
-  .preview-heading,
-  .preview-device,
-  .device-facts,
-  .preview-note {
-    margin-inline: 20px;
-  }
-
-  .preview-device {
-    margin-top: 36px;
-    margin-bottom: 36px;
-  }
-
-  .device-facts {
-    grid-template-columns: 1fr;
-    gap: 14px;
-  }
-
-  .device-facts div {
-    display: grid;
-    grid-template-columns: 92px minmax(0, 1fr);
-    gap: 12px;
+  .device-demo-stage img {
+    width: 100%;
   }
 
   .selected-device {
@@ -931,10 +830,10 @@ code {
     background: rgb(27 39 51 / 58%);
   }
 
-  .compatibility-preview {
+  .device-demo-stage {
     background:
-      linear-gradient(135deg, rgb(35 52 69 / 92%), rgb(24 36 48 / 96%)),
-      var(--surface-strong);
+      radial-gradient(circle at 50% 38%, rgb(92 117 143 / 42%), transparent 52%),
+      linear-gradient(145deg, #22303e, #18232e);
   }
 
   .support-state {

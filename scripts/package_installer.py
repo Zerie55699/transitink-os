@@ -117,6 +117,10 @@ def package_installer(
         ROOT / "installer" / "esp-web-tools",
         output_dir / "esp-web-tools",
     )
+    shutil.copytree(
+        ROOT / "installer" / "assets",
+        output_dir / "assets",
+    )
 
     firmware_dir = output_dir / "firmware"
     firmware_dir.mkdir()
