@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out complete history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan for committed secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  test-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pinned tools
+        run: scripts/install_tools.sh
+
+      - name: Verify pinned Traditional Chinese glyph data
+        run: .venv/bin/python scripts/generate_hk_glyph_font.py --check
+
+      - name: Verify embedded transit catalog
+        run: .venv/bin/python scripts/generate_transit_route_catalog.py --check
+
+      - name: Run tests
+        run: python3 -m unittest discover -s tests -p "test_*.py" -q
+
+      - name: Build ESP32-S3 firmware
+        run: PLATFORMIO_CORE_DIR="$PWD/.platformio" .venv/bin/platformio run -e zectrix_note4
+
+      - name: Verify installer release package
+        run: PLATFORMIO_CORE_DIR="$PWD/.platformio" .venv/bin/python scripts/package_installer.py

@@ -1,0 +1,40 @@
+yxml MIT License and provenance
+
+Project: https://dev.yorhel.nl/yxml
+Upstream: https://g.blicky.net/yxml.git
+Pinned commit: d41923630fcf70c6e2181722d9d087dd1aa3b530
+Retrieved UTC: 2026-07-10T14:29:52Z
+Upstream yxml.c SHA-256: 0eb0a2115264f0f484846caf348295fd0ed8fec1799b6edd8afe74266a94f73d
+Upstream yxml.h SHA-256: ccef48b99bf7ccb92bff6537154763f291057fbc123660a5f8a39d5f0c9c8850
+Upstream COPYING SHA-256: 89fd85442c45d82bf6af7d595403037d661e24e952d86f87db7913519349999a
+
+The repository copies normalize the missing final newline only. Resulting
+SHA-256 values are fd083c9bf1f5c35c19db9e8e93201449fa728abb790a1f8ba7ada16ce99ae380
+for yxml.c and 2d87b37ee9cd819df3eabf93b38fd1efce3df6810062971aa0bbf4aeabb73508
+for yxml.h.
+
+The originally planned commit 6bc21882f4667ed10797472f85cfe2cf2ccdaee6
+incorrectly reported opening element names as YXML_ELEMEND. Upstream commit
+d41923630fcf70c6e2181722d9d087dd1aa3b530 is the official corrective commit
+("Fix incorrect reporting of ELEMSTART as ELEMEND").
+
+Copyright (c) 2013 Yoran Heling
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

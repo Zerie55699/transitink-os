@@ -1,0 +1,86 @@
+name: Release firmware and installer
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pinned tools
+        run: scripts/install_tools.sh
+
+      - name: Verify generated source and catalog
+        run: |
+          .venv/bin/python scripts/generate_hk_glyph_font.py --check
+          .venv/bin/python scripts/generate_transit_route_catalog.py --check
+
+      - name: Run tests
+        run: python3 -m unittest discover -s tests -p "test_*.py" -q
+
+      - name: Build ESP32-S3 firmware
+        run: PLATFORMIO_CORE_DIR="$PWD/.platformio" .venv/bin/platformio run -e zectrix_note4
+
+      - name: Build versioned installer package
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          PLATFORMIO_CORE_DIR="$PWD/.platformio" \
+            .venv/bin/python scripts/package_installer.py \
+            --expected-version "${RELEASE_TAG#v}"
+
+      - name: Publish GitHub Release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" \
+              dist/installer/firmware/*.bin \
+              dist/installer/SHA256SUMS.txt \
+              dist/installer/release-metadata.json \
+              --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              dist/installer/firmware/*.bin \
+              dist/installer/SHA256SUMS.txt \
+              dist/installer/release-metadata.json \
+              --title "TransitInk OS $GITHUB_REF_NAME" \
+              --generate-notes \
+              --verify-tag
+          fi
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload installer site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/installer
+
+      - name: Deploy installer site
+        id: deployment
+        uses: actions/deploy-pages@v4

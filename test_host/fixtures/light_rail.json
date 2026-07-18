@@ -1,0 +1,29 @@
+{
+  "platform_list": [
+    {
+      "route_list": [
+        {"train_length":1,"arrival_departure":"A","dest_en":"Tuen Mun Ferry Pier","dest_ch":"屯門碼頭","time_en":"5 min","time_ch":"5 分鐘","route_no":"610","stop":0,"special":0,"additionalInfo1":"","routeRemarkEng2":null,"routeRemarkChi2":null},
+        {"train_length":1,"arrival_departure":"A","dest_en":"Tuen Mun Ferry Pier","dest_ch":"屯門碼頭","time_en":"5 min","time_ch":"5 分鐘","route_no":"610","stop":0,"special":0,"additionalInfo1":"","routeRemarkEng2":null,"routeRemarkChi2":null},
+        {"train_length":2,"arrival_departure":"A","dest_en":"Tuen Mun Ferry Pier","dest_ch":"屯門碼頭","time_en":"8 min","time_ch":"8 分鐘","route_no":"610","stop":0,"special":0,"additionalInfo1":"","routeRemarkEng2":null,"routeRemarkChi2":null},
+        {"train_length":1,"arrival_departure":"A","dest_en":"Yuen Long","dest_ch":"元朗","time_en":"2 min","time_ch":"2 分鐘","route_no":"610","stop":0,"special":0,"additionalInfo1":"","routeRemarkEng2":null,"routeRemarkChi2":null},
+        {"train_length":1,"arrival_departure":"A","dest_en":"Tuen Mun Ferry Pier","dest_ch":"屯門碼頭","time_en":"arriving","time_ch":"即將抵達","route_no":"610","stop":0,"special":0,"additionalInfo1":"","routeRemarkEng2":null,"routeRemarkChi2":null},
+        {"train_length":1,"arrival_departure":"A","dest_en":"Tuen Mun Ferry Pier","dest_ch":"屯門碼頭","time_en":"-","time_ch":"-","route_no":"610","stop":0,"special":0,"additionalInfo1":"","routeRemarkEng2":null,"routeRemarkChi2":null},
+        {"train_length":1,"arrival_departure":"A","dest_en":"Tuen Mun Ferry Pier","dest_ch":"屯門碼頭","time_en":"soon","time_ch":"快到","route_no":"610","stop":0,"special":0,"additionalInfo1":"","routeRemarkEng2":null,"routeRemarkChi2":null},
+        {"train_length":1,"arrival_departure":"A","dest_en":"Tuen Mun Ferry Pier","dest_ch":"屯門碼頭","time_en":"4 min","time_ch":"4 分鐘","route_no":"610","stop":1,"special":0,"additionalInfo1":"","routeRemarkEng2":null,"routeRemarkChi2":null},
+        {"train_length":1,"arrival_departure":"A","dest_en":"Tuen Mun Ferry Pier","dest_ch":"屯門碼頭","time_en":"1 min","time_ch":"1 分鐘","route_no":"901","stop":0,"special":1,"additionalInfo1":"610*","routeRemarkEng2":null,"routeRemarkChi2":null},
+        {"train_length":1,"arrival_departure":"A","dest_en":"Tuen Mun Ferry Pier","dest_ch":"屯門碼頭","time_en":"1 min","time_ch":"1 分鐘","route_no":"902","stop":0,"special":1,"additionalInfo1":"SPR","routeRemarkEng2":"Special route","routeRemarkChi2":"特別綫服務"},
+        {"train_length":1,"arrival_departure":"A","dest_en":"Unknown","dest_ch":"不存在","time_en":"6 min","time_ch":"6 分鐘","route_no":"610","stop":0,"special":0,"additionalInfo1":"","routeRemarkEng2":null,"routeRemarkChi2":null},
+        {"train_length":1,"arrival_departure":"A","dest_en":"Tuen Mun Ferry Pier","dest_ch":"屯門碼頭","time_en":"9 min","time_ch":"9 分鐘","route_no":610,"stop":0,"special":0,"additionalInfo1":"","routeRemarkEng2":null,"routeRemarkChi2":null}
+      ],
+      "platform_id": 1
+    },
+    {
+      "route_list": [
+        {"train_length":1,"arrival_departure":"A","dest_en":"Tuen Mun Ferry Pier","dest_ch":"屯門碼頭","time_en":"3 min","time_ch":"3 分鐘","route_no":"615","stop":0,"special":0,"additionalInfo1":"","routeRemarkEng2":null,"routeRemarkChi2":null}
+      ],
+      "platform_id": 2
+    }
+  ],
+  "status": 1,
+  "system_time": "2033-05-18 11:33:20"
+}

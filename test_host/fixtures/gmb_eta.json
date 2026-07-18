@@ -1,0 +1,22 @@
+{
+  "type": "ETA-Route-Stop",
+  "version": "1.0",
+  "data": {
+    "stop_id": 20003337,
+    "enabled": true,
+    "eta": [
+      {
+        "eta_seq": 1,
+        "diff": 0,
+        "timestamp": "2026-07-17T18:00:00+08:00",
+        "remarks_tc": null
+      },
+      {
+        "eta_seq": 2,
+        "diff": 7,
+        "timestamp": "2026-07-17T18:07:00+08:00",
+        "remarks_tc": "未開出"
+      }
+    ]
+  }
+}

@@ -1,0 +1,355 @@
+#include "AppConfig.h"
+
+#include <ArduinoJson.h>
+
+#include <memory>
+#include <new>
+
+namespace {
+
+String asString(JsonVariantConst value) {
+    if (value.isNull()) {
+        return "";
+    }
+    return String(value.as<const char*>());
+}
+
+std::string asStdString(JsonVariantConst value) {
+    return asString(value).c_str();
+}
+
+bool isStringWithinLimit(const String& value, std::size_t limit) {
+    return value.length() <= limit;
+}
+
+bool areCommonFieldsWithinLimits(const DeviceConfig& config) {
+    return isStringWithinLimit(config.wifiSsid, transitink::kMaxWifiSsidBytes) &&
+           isStringWithinLimit(config.wifiPassword, transitink::kMaxWifiCredentialBytes) &&
+           isStringWithinLimit(config.weatherLocationTc, transitink::kMaxCommonConfigTextBytes);
+}
+
+bool areWidgetsValid(const DeviceConfig& config) {
+    for (const auto& widget : config.widgets) {
+        if (!transitink::isWidgetConfigValid(widget)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool isLegacyRouteWithinLimits(const bus_eta::RouteSelection& route) {
+    return route.route.size() <= transitink::kMaxStableIdBytes &&
+           route.bound.size() <= transitink::kMaxStableIdBytes &&
+           route.serviceType.size() <= transitink::kMaxStableIdBytes &&
+           route.stopId.size() <= transitink::kMaxStableIdBytes &&
+           route.destTc.size() <= transitink::kMaxConfigLabelBytes;
+}
+
+void copyRoute(JsonObjectConst item, bus_eta::RouteSelection& route) {
+    route.route = asString(item["route"]).c_str();
+    route.bound = asString(item["bound"]).c_str();
+    route.serviceType = asString(item["service_type"]).c_str();
+    route.stopId = asString(item["stop_id"]).c_str();
+    route.destTc = asString(item["dest_tc"]).c_str();
+}
+
+void copyCommonFields(const JsonDocument& doc, DeviceConfig& parsed) {
+    parsed.wifiSsid = asString(doc["wifi_ssid"]);
+    parsed.wifiPassword = asString(doc["wifi_password"]);
+    parsed.weatherLocationTc = asString(doc["weather_location_tc"]);
+    if (parsed.weatherLocationTc.length() == 0) {
+        parsed.weatherLocationTc = "香港天文台";
+    }
+    parsed.sleepEnabled = doc["sleep_enabled"] | static_cast<bool>(SLEEP_ENABLED_DEFAULT);
+    parsed.wakeDurationMinutes = doc["wake_duration_minutes"] | SLEEP_WAKE_DEFAULT_MINUTES;
+    if (parsed.wakeDurationMinutes < 1) {
+        parsed.wakeDurationMinutes = 1;
+    }
+    if (parsed.wakeDurationMinutes > 60) {
+        parsed.wakeDurationMinutes = 60;
+    }
+    parsed.sleepMaintenanceHours = doc["sleep_maintenance_hours"] | SLEEP_MAINTENANCE_DEFAULT_HOURS;
+    if (parsed.sleepMaintenanceHours > 24) {
+        parsed.sleepMaintenanceHours = 24;
+    }
+}
+
+bool parseWidget(JsonObjectConst item, transitink::WidgetConfig& widget) {
+    if (!transitink::parseWidgetTypeId(asStdString(item["type"]), widget.type)) {
+        return false;
+    }
+
+    switch (widget.type) {
+        case transitink::WidgetType::Disabled:
+            break;
+        case transitink::WidgetType::BusEta: {
+            JsonObjectConst bus = item["bus"].as<JsonObjectConst>();
+            if (bus.isNull() ||
+                !transitink::parseBusOperatorId(asStdString(bus["operator"]), widget.bus.operatorId)) {
+                return false;
+            }
+            widget.bus.routeId = asStdString(bus["route_id"]);
+            widget.bus.directionId = asStdString(bus["direction_id"]);
+            widget.bus.serviceType = asStdString(bus["service_type"]);
+            widget.bus.stopId = asStdString(bus["stop_id"]);
+            widget.bus.routeLabelTc = asStdString(bus["route_label_tc"]);
+            widget.bus.stopLabelTc = asStdString(bus["stop_label_tc"]);
+            widget.bus.destinationLabelTc = asStdString(bus["destination_label_tc"]);
+            break;
+        }
+        case transitink::WidgetType::GmbEta: {
+            JsonObjectConst gmb = item["gmb"].as<JsonObjectConst>();
+            if (gmb.isNull()) {
+                return false;
+            }
+            widget.gmb.region = asStdString(gmb["region"]);
+            widget.gmb.routeCode = asStdString(gmb["route_code"]);
+            widget.gmb.routeId = asStdString(gmb["route_id"]);
+            widget.gmb.routeSeq = asStdString(gmb["route_seq"]);
+            widget.gmb.stopId = asStdString(gmb["stop_id"]);
+            widget.gmb.stopSeq = asStdString(gmb["stop_seq"]);
+            widget.gmb.routeLabelTc = asStdString(gmb["route_label_tc"]);
+            widget.gmb.stopLabelTc = asStdString(gmb["stop_label_tc"]);
+            widget.gmb.directionLabelTc = asStdString(gmb["direction_label_tc"]);
+            break;
+        }
+        case transitink::WidgetType::MtrEta: {
+            JsonObjectConst mtr = item["mtr"].as<JsonObjectConst>();
+            if (mtr.isNull() || !transitink::parseRailModeId(asStdString(mtr["mode"]), widget.mtr.mode)) {
+                return false;
+            }
+            widget.mtr.lineOrRouteId = asStdString(mtr["line_or_route_id"]);
+            widget.mtr.stationId = asStdString(mtr["station_id"]);
+            widget.mtr.directionId = asStdString(mtr["direction_id"]);
+            widget.mtr.lineOrRouteLabelTc = asStdString(mtr["line_or_route_label_tc"]);
+            widget.mtr.stationLabelTc = asStdString(mtr["station_label_tc"]);
+            widget.mtr.directionLabelTc = asStdString(mtr["direction_label_tc"]);
+            break;
+        }
+        case transitink::WidgetType::JourneyTime: {
+            JsonObjectConst journeyTime = item["journey_time"].as<JsonObjectConst>();
+            if (journeyTime.isNull()) {
+                return false;
+            }
+            widget.journeyTime.locationId = asStdString(journeyTime["location_id"]);
+            widget.journeyTime.destinationId = asStdString(journeyTime["destination_id"]);
+            widget.journeyTime.locationLabelTc = asStdString(journeyTime["location_label_tc"]);
+            widget.journeyTime.destinationLabelTc = asStdString(journeyTime["destination_label_tc"]);
+            break;
+        }
+    }
+
+    return transitink::isWidgetConfigValid(widget);
+}
+
+void writeWidget(JsonObject item, const transitink::WidgetConfig& widget) {
+    item["type"] = transitink::widgetTypeId(widget.type);
+    switch (widget.type) {
+        case transitink::WidgetType::Disabled:
+            break;
+        case transitink::WidgetType::BusEta: {
+            JsonObject bus = item.createNestedObject("bus");
+            bus["operator"] = transitink::busOperatorId(widget.bus.operatorId);
+            bus["route_id"] = widget.bus.routeId.c_str();
+            bus["direction_id"] = widget.bus.directionId.c_str();
+            bus["service_type"] = widget.bus.serviceType.c_str();
+            bus["stop_id"] = widget.bus.stopId.c_str();
+            bus["route_label_tc"] = widget.bus.routeLabelTc.c_str();
+            bus["stop_label_tc"] = widget.bus.stopLabelTc.c_str();
+            bus["destination_label_tc"] = widget.bus.destinationLabelTc.c_str();
+            break;
+        }
+        case transitink::WidgetType::GmbEta: {
+            JsonObject gmb = item.createNestedObject("gmb");
+            gmb["region"] = widget.gmb.region.c_str();
+            gmb["route_code"] = widget.gmb.routeCode.c_str();
+            gmb["route_id"] = widget.gmb.routeId.c_str();
+            gmb["route_seq"] = widget.gmb.routeSeq.c_str();
+            gmb["stop_id"] = widget.gmb.stopId.c_str();
+            gmb["stop_seq"] = widget.gmb.stopSeq.c_str();
+            gmb["route_label_tc"] = widget.gmb.routeLabelTc.c_str();
+            gmb["stop_label_tc"] = widget.gmb.stopLabelTc.c_str();
+            gmb["direction_label_tc"] = widget.gmb.directionLabelTc.c_str();
+            break;
+        }
+        case transitink::WidgetType::MtrEta: {
+            JsonObject mtr = item.createNestedObject("mtr");
+            mtr["mode"] = transitink::railModeId(widget.mtr.mode);
+            mtr["line_or_route_id"] = widget.mtr.lineOrRouteId.c_str();
+            mtr["station_id"] = widget.mtr.stationId.c_str();
+            mtr["direction_id"] = widget.mtr.directionId.c_str();
+            mtr["line_or_route_label_tc"] = widget.mtr.lineOrRouteLabelTc.c_str();
+            mtr["station_label_tc"] = widget.mtr.stationLabelTc.c_str();
+            mtr["direction_label_tc"] = widget.mtr.directionLabelTc.c_str();
+            break;
+        }
+        case transitink::WidgetType::JourneyTime: {
+            JsonObject journeyTime = item.createNestedObject("journey_time");
+            journeyTime["location_id"] = widget.journeyTime.locationId.c_str();
+            journeyTime["destination_id"] = widget.journeyTime.destinationId.c_str();
+            journeyTime["location_label_tc"] = widget.journeyTime.locationLabelTc.c_str();
+            journeyTime["destination_label_tc"] = widget.journeyTime.destinationLabelTc.c_str();
+            break;
+        }
+    }
+}
+
+}  // namespace
+
+bool parseDeviceConfigJson(const String& json, DeviceConfig& config, String& error) {
+    if (json.length() > transitink::kConfigJsonCapacity) {
+        error = "設定內容過大";
+        return false;
+    }
+
+    DynamicJsonDocument doc(transitink::kConfigJsonCapacity);
+    DeserializationError jsonError = deserializeJson(doc, json);
+    if (jsonError || doc.overflowed()) {
+        error = String("設定格式錯誤: ") + jsonError.c_str();
+        return false;
+    }
+
+    std::unique_ptr<DeviceConfig> parsed(new (std::nothrow) DeviceConfig());
+    if (!parsed) {
+        error = "設定記憶體不足";
+        return false;
+    }
+    copyCommonFields(doc, *parsed);
+    if (!areCommonFieldsWithinLimits(*parsed)) {
+        error = "共用設定欄位過長";
+        return false;
+    }
+
+    if (doc.containsKey("schema_version")) {
+        if (doc["schema_version"].as<uint16_t>() != transitink::kConfigSchemaVersion) {
+            error = "不支援的設定版本";
+            return false;
+        }
+        JsonArrayConst widgets = doc["widgets"].as<JsonArrayConst>();
+        if (widgets.isNull() || widgets.size() != transitink::kWidgetSlotCount) {
+            error = "設定必須包含四個小工具";
+            return false;
+        }
+        std::size_t index = 0;
+        for (JsonObjectConst item : widgets) {
+            if (item.isNull() || !parseWidget(item, parsed->widgets[index])) {
+                error = "小工具設定無效";
+                return false;
+            }
+            ++index;
+        }
+    } else {
+        if (!doc.containsKey("routes")) {
+            error = "缺少設定版本";
+            return false;
+        }
+        JsonArrayConst routes = doc["routes"].as<JsonArrayConst>();
+        if (routes.isNull()) {
+            error = "舊版路線格式錯誤";
+            return false;
+        }
+        String legacyStopNameTc = asString(doc["stop_name_tc"]);
+        if (!isStringWithinLimit(legacyStopNameTc, transitink::kMaxCommonConfigTextBytes)) {
+            error = "舊版站名過長";
+            return false;
+        }
+        const uint16_t legacyRefreshSeconds =
+            doc["refresh_seconds"] | ETA_REFRESH_DEFAULT_SECONDS;
+        (void)legacyRefreshSeconds;
+        std::vector<bus_eta::RouteSelection> legacyRoutes;
+        for (JsonObjectConst item : routes) {
+            if (legacyRoutes.size() >= transitink::kWidgetSlotCount) {
+                break;
+            }
+            bus_eta::RouteSelection route;
+            copyRoute(item, route);
+            if (!isLegacyRouteWithinLimits(route)) {
+                error = "舊版路線欄位過長";
+                return false;
+            }
+            if (!route.route.empty() && !route.bound.empty() && !route.serviceType.empty() &&
+                !route.stopId.empty()) {
+                legacyRoutes.push_back(route);
+            }
+        }
+        parsed->widgets =
+            transitink::migrateLegacyRoutes(legacyRoutes, legacyStopNameTc.c_str());
+    }
+
+    parsed->schemaVersion = transitink::kConfigSchemaVersion;
+    config = *parsed;
+    error = "";
+    return true;
+}
+
+String serializeDeviceConfigJson(const DeviceConfig& config) {
+    DeviceConfigSerializationMetrics metrics;
+    String json;
+    String error;
+    if (!serializeDeviceConfigJsonChecked(config, json, metrics, error)) {
+        return "";
+    }
+    return json;
+}
+
+bool serializeDeviceConfigJsonChecked(const DeviceConfig& config,
+                                      String& json,
+                                      DeviceConfigSerializationMetrics& metrics,
+                                      String& error) {
+    json = "";
+    metrics = DeviceConfigSerializationMetrics{};
+    error = "";
+    if (config.schemaVersion != transitink::kConfigSchemaVersion) {
+        error = "不支援的設定版本";
+        return false;
+    }
+    if (!areCommonFieldsWithinLimits(config)) {
+        error = "共用設定欄位過長";
+        return false;
+    }
+    if (!areWidgetsValid(config)) {
+        error = "小工具設定無效";
+        return false;
+    }
+
+    DynamicJsonDocument doc(transitink::kConfigJsonCapacity);
+    doc["schema_version"] = transitink::kConfigSchemaVersion;
+    doc["wifi_ssid"] = config.wifiSsid;
+    doc["wifi_password"] = config.wifiPassword;
+    doc["weather_location_tc"] = config.weatherLocationTc;
+    doc["sleep_enabled"] = config.sleepEnabled;
+    doc["wake_duration_minutes"] = config.wakeDurationMinutes;
+    doc["sleep_maintenance_hours"] = config.sleepMaintenanceHours;
+    JsonArray widgets = doc.createNestedArray("widgets");
+    for (const auto& widget : config.widgets) {
+        JsonObject item = widgets.createNestedObject();
+        writeWidget(item, widget);
+    }
+    if (doc.overflowed()) {
+        error = "設定內容超出 JSON 容量";
+        return false;
+    }
+
+    metrics.documentBytes = doc.memoryUsage();
+    metrics.jsonBytes = measureJson(doc);
+    if (metrics.documentBytes > transitink::kConfigJsonSafeBytes ||
+        metrics.jsonBytes > transitink::kConfigJsonSafeBytes) {
+        error = "設定內容超出 JSON 安全容量";
+        return false;
+    }
+    const std::size_t written = serializeJson(doc, json);
+    if (written != metrics.jsonBytes || json.length() != metrics.jsonBytes) {
+        json = "";
+        error = "設定序列化不完整";
+        return false;
+    }
+    return true;
+}
+
+bool hasUsableConfig(const DeviceConfig& config) {
+    if (config.schemaVersion != transitink::kConfigSchemaVersion || config.wifiSsid.length() == 0 ||
+        !areCommonFieldsWithinLimits(config)) {
+        return false;
+    }
+    return areWidgetsValid(config);
+}

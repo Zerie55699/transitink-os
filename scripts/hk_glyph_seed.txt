@@ -1,0 +1,20 @@
+# TransitInk deterministic HK glyph seed
+# Payload is sorted unique renderable BMP characters from pinned official snapshots and current static source labels.
+# KMB route URL: https://data.etabus.gov.hk/v1/transport/kmb/route/
+# KMB route retrieved UTC: 2026-07-10T13:05:21Z
+# KMB route bytes: 351490
+# KMB route SHA-256: 3443df90b719f0526be2a20e73945baa48036415ac2d1f72a29324922cbd3531
+# KMB stop URL: https://data.etabus.gov.hk/v1/transport/kmb/stop
+# KMB stop retrieved UTC: 2026-07-10T13:05:29Z
+# KMB stop bytes: 1185785
+# KMB stop SHA-256: def8cfae847afa32160d1a1ceb72acb4cb423b07ce1d2231aa063e981193ce32
+# MTR labels URL: https://opendata.mtr.com.hk/data/mtr_lines_and_stations.csv
+# MTR labels retrieved UTC: 2026-07-10T12:35:03Z
+# MTR labels bytes: 14161
+# MTR labels SHA-256: e0e781152e2e6c5f6d7763262acbae76577b71ca4c66b4b7b72a97252175e0c3
+# Light Rail labels URL: https://opendata.mtr.com.hk/data/light_rail_routes_and_stops.csv
+# Light Rail labels retrieved UTC: 2026-07-10T12:35:11Z
+# Light Rail labels bytes: 14204
+# Light Rail labels SHA-256: f2fec60de38b72f38d3478fcdeecea4e3332b300b73c23bf41b22d412a2c2066
+---
+ !"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~°·–‧→　、。「」䃟一七三上下不世丙並中丹主之乍乙九乪事二五井亞交亦亨京亭亮人仁仔仙代仲件企伊伍休伯位佐佑何佛佬佳使來例供侯促俊保信修個候倫假偉停健偵傑像僑儉儲元充兆先光克兒入內全兩八公六共其具典再冠凌凍凱凹出分列別利到刷則前創劃劇力加助動務勝勞勵包化北匡匯區千午半卑卓協南博即厚原參又及友取叠口古只可台史右司合吉同名后向君含吳告咀和咖員哥唐商啟啡善喇喚喜單嘉器四回圃國圍園圓圖團土在地圳址均坊坑坪坳型城埔埗域埸培基堂堅堡堤堯報場塊塘塞塢填境墅墓增墟墳壁壆壩士壽夏外多夜大天太夫央失奧女奶好如妙始委威娘娛媽子孔孖存孚孝孟孫學安宋完宏宗官定宜客宣宮家容宿密富察實寧寨審寫寮寶寺將專尊對導小少尖尚尼尾局居屋屏展屯山岩岸峯峰島峻崇崗嶺嶼巒川州工巧已巴巿市布希帝師常帽幕干平年幹幼庇序底店府度座庫庭庵庶康廈廟廠廣延建式張強弼形彩彭影彼往待後徑得御循微德心必忌志忠快念思怡急恆恒恩恬悅悠惠愉意愛慈態慎慕慢慧慶憩應成或戲戴戶房所手才打扶批找承技抵押担拔拱拿指按振掃排接描提揚援摩撒播擇擠支收攸放政故效救敗教散敦敬整數文斑料斧斬斯新方旅旋日早旭旺昂昇昌明易星映是時晉晏晨普景晴晶智暉暢暫暴曉曲更書曹曾最會月有服朗望朝期木未本李杏村杜杯東松板析林果枝架柏柑柯柱柳柴校栢根格桂桃案桉桐梁梅梓條梧梨梯棉棋棟棠棣植椰楊楓業楹榔榕榮槐樂樓樞樟模樹橋機橫檔檢檳櫸欄欖次欣欽歌歐歡正此步歷段母每毓毛民氣水永汀汝江池污沐沙沛河油治沾泉泓法波泥泰泳洋洗洞津洪洲活流浙浩浪浮海浸消涌淘淨深清渠渡渣測港游湄湖湯源溪溫滘滙滾滿漁演漢潔潭潮澄澗澤澳濕濟濤濱瀅瀛瀝灘灝灣火灰灶炭炮炳烈烏烤無煜煤照熙熟熱熹燃燒燕營爵爾版牌牛物牯特牽犁犬狀狗獅獲玄玉王珀珊珠班珮球理琛琳琴琼瑜瑞瑟瑤瑩瑪璧環璽瓏瓜瓦甄甘生產用甫田男甸界畔留畢當疊療登發白百的皆皇皮盈益盛盞盤盧目盲相省真眠眺眼眾睡督瞭石研砵硃硤硬碧碩確碼磚磡示社祈祐祖祠祥祿福禧禮禾秀秋科秒租秦秩稅程稍稱積穗究空窩窰立站章童競竹笏笙符第等筲箕管範簡籬米粉粒糖系紀約紅紐級素紫結絡統經綜綠綫維網線編緩練總繡纜缸缺置署羅美群義翔翠翡翰翹翼耀老聖聚聯職聽肅肇肋肚育背胡能脷膳臣臨自致臺興舊舍舞航船良芝花芳芷苑若英茂范茅茘茵茶荃草荔荷莆莊莎菁菊菜菠華菲菴萃萊萬萼落葉著葬葵蒙蒲蓬蓮蔡蔬蔭蔴蕉蕙薄薈藍藝蘅蘆蘇蘭蘿虎處號虹蛟蝴蝶融蟠蠔血行衍街衙衛衡衣表裁裕裘裝褔西要見視親覺覽觀角解計訊訓記設許診詩誌誠誤調請諾謙謝譚警議護譽讀變讓谷豉豐象豪豫貝財貢貨貫貴貿資賈賓賞賢賦購賽赤起超趾跑路躍車軍軒較載輋輔輕輝輪輸轉辦農迎近迦迪迴這通造逢連進逸逾遊運過道達遜遠遮選避邁邊那邦邨郊郝部郵都鄉鄭酒醒醫釆采里重野量金釗針銀銅銘錢錦錯鍵鍾鐘鐵鐸鑼鑽長門開間閘閣防阿陀限陞院陳陽隆隊際隧隴雀雅集雍離雨雲雷電需霖露靈青靖靠面靶鞍音韻響頁順須頌頓領頤頭顏願類顯風飛食飲養餐館饒首香馥馬駕駛駿騰驟體高魚鯉鯽鰂鱲鳳鳴鴉鴨鴻鵑鵬鵲鶴鸞鹹鹽鹿麒麖麗麟麥麵麻麼黃黎點鼓鼠龍（），．／：；
