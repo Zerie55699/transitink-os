@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "devices": [
+    {
+      "id": "zectrix_note4",
+      "name": "Zectrix Note 4",
+      "status": "supported",
+      "status_label": "正式支援",
+      "chip_family": "ESP32-S3",
+      "display": "400 × 300 電子紙",
+      "connection": "USB-C 數據線",
+      "manifest": "./manifest.json",
+      "install_note": "如未能找到連接埠，按住 BOOT 鍵再重新接上 USB。",
+      "installable": true
+    }
+  ]
+}

@@ -1,7 +1,9 @@
 import importlib.util
+import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -45,8 +47,41 @@ class ReleasePackagingTests(unittest.TestCase):
         self.assertFalse((ROOT / "installer" / "manifest.json").exists())
         self.assertEqual([], list((ROOT / "installer").rglob("*.bin")))
         page = (ROOT / "installer" / "index.html").read_text(encoding="utf-8")
+        app = (ROOT / "installer" / "app.js").read_text(encoding="utf-8")
         self.assertIn('manifest="./manifest.json"', page)
-        self.assertIn('fetch("./manifest.json"', page)
+        self.assertIn('fetch("./devices.json"', app)
+
+    def test_device_catalog_is_versioned_and_extensible(self):
+        catalog = json.loads(
+            (ROOT / "installer" / "devices.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(1, catalog["schema_version"])
+        self.assertEqual("zectrix_note4", catalog["devices"][0]["id"])
+        self.assertEqual("./manifest.json", catalog["devices"][0]["manifest"])
+        self.assertTrue(catalog["devices"][0]["installable"])
+
+    def test_package_copies_page_and_device_catalog_assets(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "installer"
+
+            def fake_merge(_build_dir, output_file):
+                output_file.write_bytes(b"test firmware")
+
+            with mock.patch.object(
+                PACKAGE_INSTALLER, "merge_firmware", side_effect=fake_merge
+            ):
+                PACKAGE_INSTALLER.package_installer(
+                    Path(directory) / "build", output, "1.0.0"
+                )
+
+            for filename in (
+                "index.html",
+                "styles.css",
+                "app.js",
+                "devices.json",
+                "manifest.json",
+            ):
+                self.assertTrue((output / filename).is_file(), filename)
 
     def test_release_workflow_builds_one_tag_matched_pages_package(self):
         workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(

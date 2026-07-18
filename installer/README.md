@@ -1,7 +1,13 @@
 # TransitInk OS web installer
 
-This directory contains only the static installer source. `manifest.json` and
-the merged ESP32-S3 firmware image are generated into `dist/installer/` by:
+This directory contains the dependency-free static installer source. Device
+compatibility is declared in `devices.json`; the page uses that catalog to select
+the matching ESP Web Tools manifest without hard-coding the interface to one
+board. Add a catalog entry and matching generated manifest when another hardware
+profile is ready for web installation.
+
+`manifest.json` and the merged ESP32-S3 firmware image are generated into
+`dist/installer/` by:
 
 ```bash
 PLATFORMIO_CORE_DIR="$PWD/.platformio" \

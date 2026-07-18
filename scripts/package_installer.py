@@ -111,8 +111,8 @@ def package_installer(
     if output_dir.exists():
         shutil.rmtree(output_dir)
     output_dir.mkdir(parents=True)
-    shutil.copy2(ROOT / "installer" / "index.html", output_dir / "index.html")
-    shutil.copy2(ROOT / "installer" / ".nojekyll", output_dir / ".nojekyll")
+    for filename in ("index.html", "styles.css", "app.js", "devices.json", ".nojekyll"):
+        shutil.copy2(ROOT / "installer" / filename, output_dir / filename)
     shutil.copytree(
         ROOT / "installer" / "esp-web-tools",
         output_dir / "esp-web-tools",

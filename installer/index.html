@@ -3,11 +3,14 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>TransitInk OS Installer</title>
+    <meta name="theme-color" content="#edf2f7" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#111820" media="(prefers-color-scheme: dark)">
+    <title>安裝 TransitInk OS</title>
     <meta
       name="description"
-      content="使用 Web Serial 將 TransitInk OS 安裝到 Zectrix Note 4。"
+      content="選擇支援的電子紙裝置，透過瀏覽器安裝 TransitInk OS，並查看首次設定及基本操作。"
     >
+    <link rel="stylesheet" href="./styles.css">
     <script type="importmap">
       {
         "imports": {
@@ -19,114 +22,277 @@
       type="module"
       src="https://unpkg.com/esp-web-tools@10.2.1/dist/web/install-button.js?module"
     ></script>
-    <style>
-      :root {
-        color-scheme: light dark;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: #f7f7f4;
-        color: #20201d;
-      }
-
-      body {
-        margin: 0;
-        min-height: 100vh;
-        display: grid;
-        place-items: center;
-        padding: 32px 18px;
-      }
-
-      main {
-        width: min(720px, 100%);
-      }
-
-      h1 {
-        margin: 0 0 12px;
-        font-size: clamp(2rem, 5vw, 3.25rem);
-        line-height: 1.05;
-      }
-
-      p {
-        margin: 0 0 18px;
-        max-width: 58ch;
-        color: #4f514d;
-        font-size: 1rem;
-        line-height: 1.65;
-      }
-
-      .panel {
-        border: 1px solid #d7d7cf;
-        border-radius: 8px;
-        background: #ffffff;
-        padding: 22px;
-        box-shadow: 0 10px 30px rgb(0 0 0 / 6%);
-      }
-
-      .meta {
-        margin-top: 18px;
-        font-size: 0.9rem;
-      }
-
-      esp-web-install-button {
-        --esp-tools-button-color: #1f6feb;
-        --esp-tools-button-text-color: #ffffff;
-        --esp-tools-button-border-radius: 6px;
-      }
-
-      button {
-        min-height: 44px;
-        border: 0;
-        border-radius: 6px;
-        background: #1f6feb;
-        color: #ffffff;
-        padding: 0 18px;
-        font: inherit;
-        font-weight: 650;
-        cursor: pointer;
-      }
-
-      @media (prefers-color-scheme: dark) {
-        :root {
-          background: #171814;
-          color: #f5f4ef;
-        }
-
-        p {
-          color: #c7c7bf;
-        }
-
-        .panel {
-          border-color: #363831;
-          background: #20221d;
-          box-shadow: none;
-        }
-      }
-    </style>
+    <script type="module" src="./app.js"></script>
   </head>
   <body>
-    <main>
-      <h1>TransitInk OS Installer</h1>
-      <p>使用桌面 Chrome、Edge 或支援 Web Serial 的瀏覽器，連接 Zectrix Note 4 後安裝 TransitInk OS。</p>
-      <section class="panel" aria-label="TransitInk OS 韌體安裝器">
-        <esp-web-install-button manifest="./manifest.json">
-          <button slot="activate">安裝 TransitInk OS</button>
-          <p slot="unsupported">此瀏覽器未支援 Web Serial，請改用桌面 Chrome 或 Edge。</p>
-          <p slot="not-allowed">此安裝器需要以 HTTPS 或 localhost 開啟。</p>
-        </esp-web-install-button>
-        <p class="meta">
-          版本：<span id="firmware-version">正在讀取…</span>。安裝會清除裝置上的現有設定及覆蓋 firmware；如找不到裝置，請按住 BOOT 再重新連接。
-        </p>
+    <a class="skip-link" href="#installer">跳到安裝工具</a>
+
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="TransitInk OS 首頁">
+        <span class="brand-mark" aria-hidden="true"><span></span></span>
+        <span>TransitInk OS</span>
+      </a>
+      <nav class="site-nav" aria-label="頁面導覽">
+        <a href="#installer">安裝</a>
+        <a href="#operation">基本操作</a>
+        <a href="#setup">首次設定</a>
+        <a href="#help">疑難排解</a>
+      </nav>
+      <a
+        class="source-link"
+        href="https://github.com/wongshingg/transitink-os"
+        target="_blank"
+        rel="noreferrer"
+      >查看源碼</a>
+    </header>
+
+    <main id="top">
+      <section class="hero shell" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow">開源電子紙交通資訊系統</p>
+          <h1 id="hero-title">將 TransitInk OS 安裝到你的裝置</h1>
+          <p class="hero-summary">
+            透過瀏覽器更新韌體，安裝後即可設定四個交通資訊小工具。
+          </p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#installer">開始安裝</a>
+            <a class="button button-secondary" href="#operation">查看操作簡介</a>
+          </div>
+        </div>
+
+        <aside class="compatibility-preview" aria-label="目前選擇的裝置">
+          <div class="preview-heading">
+            <span>目前選擇</span>
+            <strong id="hero-device-status">正式支援</strong>
+          </div>
+          <p class="preview-device" id="hero-device-name">Zectrix Note 4</p>
+          <dl class="device-facts">
+            <div>
+              <dt>處理器</dt>
+              <dd id="hero-chip-family">ESP32-S3</dd>
+            </div>
+            <div>
+              <dt>顯示器</dt>
+              <dd id="hero-display">400 × 300 電子紙</dd>
+            </div>
+            <div>
+              <dt>連接方式</dt>
+              <dd id="hero-connection">USB-C 數據線</dd>
+            </div>
+          </dl>
+          <p class="preview-note">裝置資料由版本化清單提供，可隨新增硬件擴充。</p>
+        </aside>
+      </section>
+
+      <section class="installer-section shell" id="installer" aria-labelledby="installer-title">
+        <div class="section-intro">
+          <h2 id="installer-title">選擇裝置並安裝</h2>
+          <p>先確認型號，再使用桌面 Chrome 或 Edge 開始安裝。</p>
+        </div>
+
+        <div class="installer-layout">
+          <div class="install-panel">
+            <div class="field-group">
+              <label for="device-select">裝置型號</label>
+              <select id="device-select" aria-describedby="device-help">
+                <option value="zectrix_note4">Zectrix Note 4</option>
+              </select>
+              <p class="field-help" id="device-help">
+                只會顯示已有相容韌體的裝置。日後新增型號會出現在此清單。
+              </p>
+            </div>
+
+            <div class="selected-device" aria-live="polite">
+              <div>
+                <span class="selected-label">已選擇</span>
+                <strong id="selected-device-name">Zectrix Note 4</strong>
+              </div>
+              <span class="support-state" id="selected-device-status">正式支援</span>
+            </div>
+
+            <esp-web-install-button id="install-button" manifest="./manifest.json">
+              <button class="install-action" slot="activate" type="button">
+                連接裝置並安裝
+              </button>
+              <p class="inline-message error-message" slot="unsupported">
+                此瀏覽器不支援 Web Serial，請改用桌面 Chrome 或 Edge。
+              </p>
+              <p class="inline-message error-message" slot="not-allowed">
+                安裝工具需要透過 HTTPS 或 localhost 開啟。
+              </p>
+            </esp-web-install-button>
+
+            <noscript>
+              <p class="inline-message error-message">請啟用 JavaScript 才能使用安裝工具。</p>
+            </noscript>
+
+            <div class="release-status" id="release-status" role="status" aria-live="polite">
+              <span>韌體版本</span>
+              <strong id="firmware-version">正在讀取</strong>
+            </div>
+
+            <p class="erase-warning">
+              安裝會覆蓋現有韌體並清除裝置設定。請先記下 Wi-Fi 和小工具設定。
+            </p>
+          </div>
+
+          <aside class="preflight" aria-labelledby="preflight-title">
+            <h3 id="preflight-title">安裝前確認</h3>
+            <ul class="check-list">
+              <li>使用可傳輸資料的 USB 線，而非只供充電的線材。</li>
+              <li>關閉其他正在使用序列連接埠的程式。</li>
+              <li>確認裝置型號與上方選擇完全相同。</li>
+            </ul>
+            <p class="device-specific-note" id="device-install-note">
+              如未能找到連接埠，按住 BOOT 鍵再重新接上 USB。
+            </p>
+          </aside>
+        </div>
+      </section>
+
+      <section class="operation-section shell" id="operation" aria-labelledby="operation-title">
+        <div class="section-intro compact-intro">
+          <h2 id="operation-title">基本操作</h2>
+          <p>整個安裝在瀏覽器內完成，一般只需數分鐘。</p>
+        </div>
+        <ol class="procedure">
+          <li>
+            <span class="procedure-index" aria-hidden="true">1</span>
+            <div>
+              <h3>連接裝置</h3>
+              <p>使用 USB 數據線連接電腦，並保持裝置供電穩定。</p>
+            </div>
+          </li>
+          <li>
+            <span class="procedure-index" aria-hidden="true">2</span>
+            <div>
+              <h3>授權連接埠</h3>
+              <p>按「連接裝置並安裝」，在瀏覽器視窗選擇新增的 USB 連接埠。</p>
+            </div>
+          </li>
+          <li>
+            <span class="procedure-index" aria-hidden="true">3</span>
+            <div>
+              <h3>完成寫入</h3>
+              <p>不要拔除線材或關閉分頁。完成後裝置會重新啟動。</p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <section class="setup-section shell" id="setup" aria-labelledby="setup-title">
+        <div class="setup-copy">
+          <h2 id="setup-title">首次啟動設定</h2>
+          <p>
+            裝置首次啟動時會建立設定用 Wi-Fi。手機或電腦不需要安裝額外應用程式。
+          </p>
+          <div class="setup-addresses">
+            <div>
+              <span>Wi-Fi 名稱</span>
+              <code>TransitInk-xxxx</code>
+            </div>
+            <div>
+              <span>設定網址</span>
+              <code>http://192.168.4.1/</code>
+            </div>
+          </div>
+        </div>
+
+        <div class="configuration-guide">
+          <h3>在設定頁完成以下項目</h3>
+          <ul>
+            <li>
+              <strong>連接網絡</strong>
+              <span>輸入日常使用的 Wi-Fi 名稱及密碼。</span>
+            </li>
+            <li>
+              <strong>安排主畫面</strong>
+              <span>選擇四個小工具、排列次序，或停用不需要的位置。</span>
+            </li>
+            <li>
+              <strong>設定更新</strong>
+              <span>選擇更新頻率、省電模式和交通路線資料。</span>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="widgets-section shell" aria-labelledby="widgets-title">
+        <div class="section-intro compact-intro">
+          <h2 id="widgets-title">可顯示的交通資訊</h2>
+          <p>每個位置均可獨立選擇資料來源及路線。</p>
+        </div>
+        <div class="widget-grid">
+          <article>
+            <span aria-hidden="true">巴</span>
+            <div>
+              <h3>巴士 ETA</h3>
+              <p>九巴、龍運及城巴路線。</p>
+            </div>
+          </article>
+          <article>
+            <span aria-hidden="true">小</span>
+            <div>
+              <h3>專線小巴 ETA</h3>
+              <p>以路線代號搜尋方向及站牌。</p>
+            </div>
+          </article>
+          <article>
+            <span aria-hidden="true">鐵</span>
+            <div>
+              <h3>港鐵及輕鐵</h3>
+              <p>查看列車方向及預計到站時間。</p>
+            </div>
+          </article>
+          <article>
+            <span aria-hidden="true">路</span>
+            <div>
+              <h3>行車時間</h3>
+              <p>運輸署主要路段行車時間。</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="help-section shell" id="help" aria-labelledby="help-title">
+        <div class="section-intro compact-intro">
+          <h2 id="help-title">疑難排解</h2>
+          <p>遇到問題時，可保留現有頁面並逐項檢查。</p>
+        </div>
+        <div class="help-list">
+          <details>
+            <summary>找不到裝置或連接埠</summary>
+            <p>更換可傳輸資料的 USB 線或連接埠，然後按住 BOOT 鍵重新連接。</p>
+          </details>
+          <details>
+            <summary>安裝途中中斷</summary>
+            <p>重新接上裝置並再次開始安裝。完成前不要關閉分頁或拔除線材。</p>
+          </details>
+          <details>
+            <summary>安裝後沒有顯示設定網絡</summary>
+            <p>重新啟動裝置並等待片刻，再於 Wi-Fi 清單尋找 <code>TransitInk-xxxx</code>。</p>
+          </details>
+          <details>
+            <summary>我的裝置不在清單內</summary>
+            <p>
+              請勿嘗試使用其他型號的韌體。開發者可參閱
+              <a href="https://github.com/wongshingg/transitink-os/blob/main/docs/ADDING_HARDWARE.md">新增硬件指南</a>。
+            </p>
+          </details>
+        </div>
       </section>
     </main>
-    <script type="module">
-      const version = document.querySelector("#firmware-version");
-      try {
-        const response = await fetch("./manifest.json", { cache: "no-store" });
-        if (!response.ok) throw new Error("manifest unavailable");
-        const manifest = await response.json();
-        version.textContent = manifest.version || "未知";
-      } catch {
-        version.textContent = "未能讀取";
-      }
-    </script>
+
+    <footer class="site-footer shell">
+      <div>
+        <strong>TransitInk OS</strong>
+        <p>為可擴充電子紙硬件而設的開源交通資訊系統。</p>
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/wongshingg/transitink-os">GitHub</a>
+        <a href="https://github.com/wongshingg/transitink-os/releases">版本發布</a>
+        <a href="https://github.com/wongshingg/transitink-os/blob/main/LICENSE">Apache-2.0</a>
+      </div>
+    </footer>
   </body>
 </html>
