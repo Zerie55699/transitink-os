@@ -43,6 +43,29 @@ bool readText(JsonObjectConst object,
     return true;
 }
 
+bool readIntegerOrNumericString(JsonVariantConst field, int& value) {
+    if (field.is<int>()) {
+        value = field.as<int>();
+        return true;
+    }
+    if (!field.is<const char*>()) {
+        return false;
+    }
+    const char* text = field.as<const char*>();
+    if (text == nullptr || text[0] == '\0') {
+        return false;
+    }
+    int parsed = 0;
+    for (const char* cursor = text; *cursor != '\0'; ++cursor) {
+        if (!std::isdigit(static_cast<unsigned char>(*cursor))) {
+            return false;
+        }
+        parsed = std::min(10000, parsed * 10 + (*cursor - '0'));
+    }
+    value = parsed;
+    return true;
+}
+
 template <typename Handler>
 bool scanDataObjects(CatalogByteReader& reader,
                      Handler handler,
@@ -429,9 +452,11 @@ bool parseBusRouteStops(CatalogByteReader& reader,
         std::string rowRoute;
         std::string rowDirection;
         std::string stop;
+        int sequence = 0;
         if (!readText(object, "route", rowRoute, itemError) ||
             !readText(object, object.containsKey("dir") ? "dir" : "bound", rowDirection, itemError) ||
-            !readText(object, "stop", stop, itemError) || !object["seq"].is<int>() ||
+            !readText(object, "stop", stop, itemError) ||
+            !readIntegerOrNumericString(object["seq"], sequence) ||
             !isOfficialId(rowRoute) || !isOfficialId(stop)) {
             if (itemError.empty()) {
                 itemError = "路線站牌項目格式不正確";
@@ -443,7 +468,6 @@ bool parseBusRouteStops(CatalogByteReader& reader,
             !readText(object, "service_type", rowService, itemError, true)) {
             return false;
         }
-        const int sequence = object["seq"].as<int>();
         if (sequence < 1 || sequence > 9999) {
             itemError = "站牌次序不正確";
             return false;

@@ -704,10 +704,14 @@ bool isJourneyTimePairValid(const std::string& locationId,
 
 const TransitCatalogGroup* findTransitCatalogGroup(
     RailMode mode, const std::string& groupId) {
-    const TransitCatalogView catalog =
-        mode == RailMode::HeavyRail ? heavyRailCatalog() : lightRailCatalog();
-    for (std::size_t index = 0; index < catalog.groupCount; ++index) {
-        if (groupId == catalog.groups[index].id) return &catalog.groups[index];
+    if (mode == RailMode::HeavyRail) {
+        for (const auto& group : kHeavyRailGroups) {
+            if (groupId == group.id) return &group;
+        }
+    } else {
+        for (const auto& group : kLightRailGroups) {
+            if (groupId == group.id) return &group;
+        }
     }
     return nullptr;
 }

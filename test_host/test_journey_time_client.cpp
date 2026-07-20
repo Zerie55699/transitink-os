@@ -155,6 +155,8 @@ void testEarlyTransportFailuresAndInvalidPair() {
 }  // namespace
 
 int main() {
+    assert(std::string(JourneyTimeClient::requestUrl()) ==
+           "https://resource.data.one.gov.hk/td/jss/Journeytimev2.xml");
     testKnownLengthPrematureEofIsFailure();
     testKnownLengthNeverOverreads();
     testUnknownLengthSuccessAndNoMatch();

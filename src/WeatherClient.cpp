@@ -1,4 +1,5 @@
 #include "WeatherClient.h"
+#include "TransitTlsTrust.h"
 
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
@@ -31,7 +32,7 @@ bool readTemperatureFor(JsonArrayConst rows, const String& wanted, String& place
 
 bool WeatherClient::httpGet(const String& url, String& body, String& error) {
     WiFiClientSecure tls;
-    tls.setInsecure();
+    transitink::configureVerifiedTls(tls);
     HTTPClient http;
     http.setTimeout(10000);
     http.setReuse(false);

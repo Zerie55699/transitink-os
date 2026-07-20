@@ -75,35 +75,9 @@ WidgetSnapshot baseSnapshot(uint8_t slot,
                             const WidgetConfig& config,
                             int64_t fetchedAtEpoch,
                             int64_t dataAtEpoch) {
-    WidgetSnapshot snapshot;
-    snapshot.slot = slot;
-    snapshot.type = config.type;
+    WidgetSnapshot snapshot = configuredWidgetSnapshot(slot, config);
     snapshot.fetchedAtEpoch = fetchedAtEpoch;
     snapshot.dataAtEpoch = dataAtEpoch;
-
-    switch (config.type) {
-        case WidgetType::BusEta:
-            snapshot.title = joinNonEmpty(
-                {config.bus.routeLabelTc, config.bus.destinationLabelTc});
-            snapshot.subtitle = displayStopLabelTc(config.bus.stopLabelTc);
-            break;
-        case WidgetType::GmbEta:
-            snapshot.title = joinNonEmpty(
-                {config.gmb.routeLabelTc, config.gmb.directionLabelTc});
-            snapshot.subtitle = config.gmb.stopLabelTc;
-            break;
-        case WidgetType::MtrEta:
-            snapshot.title = joinNonEmpty(
-                {config.mtr.lineOrRouteLabelTc, config.mtr.directionLabelTc});
-            snapshot.subtitle = config.mtr.stationLabelTc;
-            break;
-        case WidgetType::JourneyTime:
-            snapshot.title = config.journeyTime.locationLabelTc;
-            snapshot.subtitle = config.journeyTime.destinationLabelTc;
-            break;
-        case WidgetType::Disabled:
-            break;
-    }
     return snapshot;
 }
 
@@ -173,6 +147,37 @@ bool railRecordMatches(const RailArrivalRecord& record, const MtrWidgetConfig& c
 }
 
 }  // namespace
+
+WidgetSnapshot configuredWidgetSnapshot(uint8_t slot, const WidgetConfig& config) {
+    WidgetSnapshot snapshot;
+    snapshot.slot = slot;
+    snapshot.type = config.type;
+
+    switch (config.type) {
+        case WidgetType::BusEta:
+            snapshot.title = joinNonEmpty(
+                {config.bus.routeLabelTc, config.bus.destinationLabelTc});
+            snapshot.subtitle = displayStopLabelTc(config.bus.stopLabelTc);
+            break;
+        case WidgetType::GmbEta:
+            snapshot.title = joinNonEmpty(
+                {config.gmb.routeLabelTc, config.gmb.directionLabelTc});
+            snapshot.subtitle = config.gmb.stopLabelTc;
+            break;
+        case WidgetType::MtrEta:
+            snapshot.title = joinNonEmpty(
+                {config.mtr.lineOrRouteLabelTc, config.mtr.directionLabelTc});
+            snapshot.subtitle = config.mtr.stationLabelTc;
+            break;
+        case WidgetType::JourneyTime:
+            snapshot.title = config.journeyTime.locationLabelTc;
+            snapshot.subtitle = config.journeyTime.destinationLabelTc;
+            break;
+        case WidgetType::Disabled:
+            break;
+    }
+    return snapshot;
+}
 
 std::string displayStopLabelTc(std::string label) {
     return withoutTrailingStopCode(std::move(label));

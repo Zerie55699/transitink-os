@@ -74,7 +74,10 @@ class ProjectStructureTests(unittest.TestCase):
     def test_platformio_targets_zectrix_esp32s3(self):
         ini = read_text("platformio.ini")
         self.assertIn("[env:zectrix_note4]", ini)
-        self.assertRegex(ini, r"platform\s*=\s*espressif32")
+        self.assertIn(
+            "pioarduino/platform-espressif32/releases/download/55.03.39",
+            ini,
+        )
         self.assertRegex(ini, r"framework\s*=\s*arduino")
         self.assertRegex(ini, r"board_upload\.flash_size\s*=\s*16MB")
         self.assertRegex(ini, r"board_build\.arduino\.memory_type\s*=\s*qio_opi")
@@ -128,8 +131,9 @@ class ProjectStructureTests(unittest.TestCase):
         display = read_text("src/EInkDisplay.cpp")
         portal = read_text("src/TransitInkPortalPage.cpp")
         self.assertNotIn('String(FIRMWARE_SHORT_NAME) + " 未同步"', display)
-        self.assertIn('String("連接此熱點\\n開啟 http://192.168.4.1/\\n完成 ") +', main)
-        self.assertIn('FIRMWARE_SHORT_NAME + " 設定"', main)
+        self.assertIn('String("密碼：") + configPortal.apPassword()', main)
+        self.assertIn('const String localUrl = "http://" + WiFi.localIP().toString() + "/";', main)
+        self.assertNotIn("再按 Volume 返回主頁", main)
 
         brand_literals = []
         for source in (main, display, portal):
@@ -143,15 +147,15 @@ class ProjectStructureTests(unittest.TestCase):
                 literal = double_quoted or single_quoted
                 if "TransitInk" in literal:
                     brand_literals.append(literal)
-        self.assertEqual(["X-TransitInk-CSRF"], brand_literals)
+        self.assertEqual(["X-TransitInk-CSRF", "X-TransitInk-Access"], brand_literals)
 
     def test_flash_scripts_keep_backup_restore_path(self):
         backup = read_text("scripts/backup_flash.sh")
         restore = read_text("scripts/restore_flash.sh")
-        self.assertIn("read_flash", backup)
+        self.assertIn("read-flash", backup)
         self.assertIn('FLASH_SIZE_HEX="${ESP32_FLASH_SIZE:-0x1000000}"', backup)
         self.assertIn('CHIP="${ESP32_CHIP:-esp32s3}"', backup)
-        self.assertIn("write_flash 0", restore)
+        self.assertIn("write-flash 0", restore)
         self.assertIn('FLASH_SIZE_HEX="${ESP32_FLASH_SIZE:-0x1000000}"', restore)
 
     def test_firmware_assembles_transitink_widget_runtime_without_legacy_eta(self):
@@ -180,7 +184,7 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertIn("waitForTimeSync", main)
         self.assertNotIn("正在連接 Wi-Fi", main)
         self.assertIn("Wi-Fi 未連接", main)
-        self.assertIn("連接此熱點", main)
+        self.assertIn("configPortal.apPassword()", main)
         self.assertNotIn("EtaController", main)
         self.assertNotIn("nextEtaRefreshMs", main)
         self.assertNotIn("deviceConfig.refreshSeconds", main)
@@ -194,6 +198,10 @@ class ProjectStructureTests(unittest.TestCase):
         support = read_text("src/hardware/BoardSupport.cpp")
         self.assertIn("transitink::hardware::configureHomeWakeup()", main)
         self.assertIn("transitink::hardware::homeButtonPressed()", main)
+        self.assertIn("transitink::hardware::takeHomePress()", main)
+        self.assertIn("transitink::hardware::clearPendingHomePress()", main)
+        self.assertIn("startButtonMonitoring", support)
+        self.assertIn("DebouncedButtonPressDetector", support)
         self.assertIn("gpio_wakeup_enable", support)
         self.assertIn("rtc_gpio_deinit", support)
         self.assertIn("ESP_SLEEP_WAKEUP_GPIO", main)
@@ -210,11 +218,13 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertIn("buttons.configMaxClickMs == 1200", profile_test)
 
         main = read_text("src/main.cpp")
-        self.assertIn("DualButtonHoldDetector", main)
-        self.assertIn("kBoardProfile.buttons.configDebounceMs", main)
-        self.assertIn("factoryResetUpButtonPressed()", main)
-        self.assertIn("factoryResetDownButtonPressed()", main)
-        self.assertIn("configButtonPressed()", main)
+        support = read_text("src/hardware/BoardSupport.cpp")
+        self.assertIn("DualButtonHoldDetector", support)
+        self.assertIn("kBoardProfile.buttons.configDebounceMs", support)
+        self.assertIn("factoryResetUpButtonPressed()", support)
+        self.assertIn("factoryResetDownButtonPressed()", support)
+        self.assertIn("buttonPressed(kBoardProfile.buttons.configPin)", support)
+        self.assertIn("takeFactoryResetHold()", main)
         self.assertIn("configStore.clear()", main)
         self.assertIn("WiFi.disconnect(true, true)", main)
         self.assertIn("LittleFS.format()", main)
@@ -230,12 +240,20 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertIn("void serviceConfigButton()", main)
         self.assertIn("Config button clicked", main)
         self.assertIn("Config button clicked: returning to dashboard", main)
-        self.assertIn("configButtonDetector.update(configPressed, downPressed || factoryResetPendingRestart, millis())", main)
-        self.assertIn("if (configAccessMode) {\n            returnToDashboard();\n        } else {\n            showConfigAccessScreen();\n        }", main)
-        self.assertIn("configPortal.begin(WiFi.status() != WL_CONNECTED)", main)
-        self.assertIn("裝置設定", main)
-        self.assertIn("目前 Wi-Fi", main)
-        self.assertIn("einkDisplay.showConfigMode(networkName, message, configUrl)", main)
+        self.assertIn("transitink::hardware::takeConfigClick()", main)
+        self.assertIn("transitink::hardware::clearPendingConfigClick()", main)
+        self.assertIn("if (configAccessMode) {\n        returnToDashboard();\n    } else {\n        showConfigAccessScreen();\n    }", main)
+        self.assertIn("const bool useAccessPoint = WiFi.status() != WL_CONNECTED;", main)
+        self.assertIn("configPortal.begin(useAccessPoint)", main)
+        self.assertIn("configPortal.pageUrl()", main)
+        self.assertIn("configPortal.isApMode()", main)
+        self.assertIn("WiFi.localIP().toString()", main)
+        self.assertNotIn("kConfigAccessTimeoutMs", main)
+        self.assertNotIn("serviceConfigAccessTimeout", main)
+        self.assertNotIn("configAccessStartedAtMs", main)
+        self.assertNotIn("十分鐘後自動關閉", main)
+        self.assertNotIn("掃描 QR 驗證開啟", main)
+        self.assertIn("einkDisplay.showConfigMode(deviceConfig.wifiSsid, message, configUrl)", main)
         self.assertIn("configPortal.stop();", main)
         self.assertIn("configAccessMode = false", main)
         self.assertIn("refreshAllWidgetsNow();", main)
@@ -265,7 +283,8 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertIn("Config portal deferred until button press", main)
         self.assertRegex(main, r"if \(!loaded \|\| !hasUsableConfig\(deviceConfig\)\) \{[\s\S]*configPortal\.begin\(true\);")
         self.assertIn("if (deviceConfig.sleepEnabled && sleepMaintenanceWake) {", main)
-        self.assertIn("const bool homeWake = wakeCause == ESP_SLEEP_WAKEUP_GPIO", main)
+        self.assertIn("SleepResumeAction::ShowDashboard", main)
+        self.assertIn("if (deviceConfig.sleepEnabled && resumeSleep) {", main)
         self.assertIn("wakeStartedAtMs = millis();", main)
         self.assertIn("refreshAllWidgetsNow();", main)
         self.assertNotIn("routesConfigured", main)
@@ -772,7 +791,8 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertIn('id="sleep_maintenance_hours"', page)
         self.assertIn("省電睡眠模式", page)
         self.assertIn("醒著時間", page)
-        self.assertIn("睡眠中背景更新", page)
+        self.assertIn("睡眠中時間及天氣同步", page)
+        self.assertIn("不會喚醒畫面或更新即時交通資料；輸入 0 代表停用。", page)
         self.assertIn("byId('sleep_enabled').checked=cfg.sleep_enabled!==false", page)
         self.assertIn("byId('wake_duration_minutes').value=cfg.wake_duration_minutes||5", page)
         self.assertIn("byId('sleep_maintenance_hours').value=cfg.sleep_maintenance_hours??12", page)
@@ -815,15 +835,24 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertIn("WiFi.mode(WIFI_OFF)", main)
         self.assertIn("einkDisplay.prepareForSleep()", main)
         self.assertIn("transitink::hardware::configureHomeWakeup()", main)
-        self.assertIn("transitink::hardware::configureChargeWakeup()", main)
+        self.assertNotIn("transitink::hardware::configureChargeWakeup()", main)
+        self.assertNotIn("configureChargeWakeup", support)
+        wake_config = cpp_function_body(main, "void configureLightSleepWakeup()")
+        assert_fragments_in_order(
+            self,
+            wake_config,
+            "esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);",
+            "transitink::hardware::configureHomeWakeup();",
+            "esp_sleep_enable_timer_wakeup(maintenanceUs);",
+        )
         self.assertIn("esp_sleep_enable_gpio_wakeup()", support)
         self.assertIn("esp_light_sleep_start()", main)
         self.assertNotIn("esp_deep_sleep_start()", main)
         self.assertNotIn("esp_sleep_enable_ext0_wakeup", main)
         self.assertIn("esp_sleep_enable_timer_wakeup", main)
         self.assertIn("sleepMaintenanceIntervalUs", main)
-        self.assertIn("esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER", main)
-        self.assertIn("esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_GPIO", main)
+        self.assertIn("wakeCause == ESP_SLEEP_WAKEUP_TIMER", main)
+        self.assertIn("wakeCause == ESP_SLEEP_WAKEUP_GPIO", main)
         self.assertIn("waitForHomeRelease();", main)
         self.assertIn("returnFromLightSleep();", main)
         self.assertIn("performLightSleepMaintenance();", main)
@@ -845,7 +874,8 @@ class ProjectStructureTests(unittest.TestCase):
             "const bool rtcResetWake = consumeSleepResumeMarker();",
             "const bool persistentResetWake = configStoreReady && configStore.sleepResumePending();",
             "const bool resetWake = rtcResetWake || persistentResetWake;",
-            "const bool homeWake = wakeCause == ESP_SLEEP_WAKEUP_GPIO || resetWake;",
+            "bus_eta::decideSleepResumeAction(",
+            "SleepResumeAction::ShowDashboard",
             "einkDisplay.begin(false);",
         )
         self.assertRegex(main, r"if \(deviceConfig\.sleepEnabled && sleepMaintenanceWake\) \{[\s\S]*performLightSleepMaintenance\(\);[\s\S]*enterSleepMode\(\"maintenance complete\"\)")
@@ -854,26 +884,19 @@ class ProjectStructureTests(unittest.TestCase):
             self,
             maintenance,
             "syncTimeAndWeatherBeforeDashboard(false);",
-            "widgetScheduler.forceAllDue(nowMs);",
-            "widgetScheduler.serviceNextDue(nowMs, nowEpoch);",
-            "widgetScheduler.displaySnapshots(nowEpoch)",
-            "einkDisplay.showSleep",
             "stopNetworkForSleep();",
+            "einkDisplay.refreshSleepStatusAndWeather(currentDisplaySnapshots(), weatherSnapshot);",
+            "einkDisplay.prepareForSleep();",
         )
-        self.assertEqual(1, maintenance.count("serviceNextDue("))
-        self.assertGreater(
-            maintenance.index("const uint32_t nowMs = millis();"),
-            maintenance.index('weatherSnapshot.error = "Wi-Fi 未連接";'),
-        )
+        self.assertNotIn("widgetScheduler", maintenance)
+        self.assertNotIn("einkDisplay.showSleep", maintenance)
+        self.assertNotIn("einkDisplay.begin", maintenance)
         home_wake = cpp_function_body(main, "void returnFromLightSleep()")
-        assert_fragments_in_order(
-            self,
-            home_wake,
-            "connectWifi(deviceConfig)",
-            "syncTimeAndWeatherBeforeDashboard(true);",
-            "refreshAllWidgetsNow();",
-            "clearPersistentSleepResumeMarker();",
-        )
+        self.assertIn("startHomeWakeRefresh();", home_wake)
+        self.assertNotIn("connectWifi(deviceConfig)", home_wake)
+        self.assertNotIn("syncTimeAndWeatherBeforeDashboard", home_wake)
+        self.assertNotIn("refreshAllWidgetsNow", home_wake)
+        self.assertNotIn("refreshWeatherNow", home_wake)
 
         battery = read_text("include/BatteryMonitor.h")
         self.assertIn("void shutdown();", battery)
@@ -885,6 +908,10 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertIn("void begin(bool showBootScreen = true);", header)
         self.assertIn("void showSleep(const transitink::WidgetSnapshotSet& snapshots, const WeatherSnapshot& weather);", header)
         self.assertNotIn("void showSleep(const DeviceConfig& config, const WeatherSnapshot& weather);", header)
+        self.assertIn(
+            "void refreshSleepStatusAndWeather(const transitink::WidgetSnapshotSet& snapshots, const WeatherSnapshot& weather);",
+            header,
+        )
         self.assertIn("void prepareForSleep();", header)
 
         display = read_text("src/EInkDisplay.cpp")
@@ -908,6 +935,24 @@ class ProjectStructureTests(unittest.TestCase):
             "drawWeatherFooter(weather);",
         )
         self.assertNotIn("drawEtaRows", snapshot_sleep_body)
+        sleep_status_body = cpp_function_body(
+            display,
+            "void EInkDisplay::refreshSleepStatusAndWeather(",
+        )
+        assert_fragments_in_order(
+            self,
+            sleep_status_body,
+            "if (!previousFrameValid)",
+            "showSleep(snapshots, weather);",
+            "std::memcpy(frameBuffer, previousFrameBuffer, sizeof(frameBuffer));",
+            "clearRegion(kStatusRegion);",
+            "drawClockAndStatusBar();",
+            "clearRegion(kFooterRegion);",
+            "drawWeatherFooter(weather);",
+            "partialRefresh(kStatusRegion.x, kStatusRegion.y, kStatusRegion.w, kStatusRegion.h);",
+            "partialRefresh(kFooterRegion.x, kFooterRegion.y, kFooterRegion.w, kFooterRegion.h);",
+            "markNonDashboardFrame();",
+        )
         self.assertNotIn("TRANSITINK_LEGACY_COMPAT", display)
         self.assertNotIn("drawEtaRows", display)
         self.assertNotIn("drawSleepRows", display)
@@ -920,7 +965,8 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertIn("const bool rtcResetWake = consumeSleepResumeMarker()", main)
         self.assertIn("const bool persistentResetWake = configStoreReady && configStore.sleepResumePending()", main)
         self.assertIn("const bool resetWake = rtcResetWake || persistentResetWake", main)
-        self.assertIn("const bool homeWake = wakeCause == ESP_SLEEP_WAKEUP_GPIO || resetWake", main)
+        self.assertIn("bus_eta::decideSleepResumeAction", main)
+        self.assertIn("SleepResumeAction::ResumeSleep", main)
         setup_body = cpp_function_body(main, "void setup()")
         self.assertIn("einkDisplay.begin(false);", setup_body)
         self.assertNotIn("einkDisplay.showBoot", setup_body)
@@ -929,12 +975,56 @@ class ProjectStructureTests(unittest.TestCase):
             self,
             setup_body,
             "const bool persistentResetWake = configStoreReady && configStore.sleepResumePending();",
+            "bus_eta::decideSleepResumeAction(",
             "einkDisplay.begin(false);",
-            "syncTimeAndWeatherBeforeDashboard(homeWake);",
+            "if (deviceConfig.sleepEnabled && resumeSleep) {",
+            'enterSleepMode("unconfirmed sleep reset");',
+            "if (homeWake) {",
+            "startHomeWakeRefresh();",
+            "return;",
+            "connectWifi(deviceConfig)",
+            "syncTimeAndWeatherBeforeDashboard(false);",
             "refreshAllWidgetsNow();",
-            "if (resetWake) {",
-            "clearPersistentSleepResumeMarker();",
         )
+        wake_refresh = cpp_function_body(main, "void startHomeWakeRefresh()")
+        assert_fragments_in_order(
+            self,
+            wake_refresh,
+            "widgetScheduler.forceAllDue(wakeStartedAtMs);",
+            "einkDisplay.showDashboard(homeWakeLoadingSnapshots(), weatherSnapshot);",
+            "WiFi.begin(deviceConfig.wifiSsid.c_str(), deviceConfig.wifiPassword.c_str());",
+        )
+        self.assertNotIn("connectWifi", wake_refresh)
+        self.assertNotIn("refreshWeatherNow", wake_refresh)
+        loading_snapshots = cpp_function_body(
+            main,
+            "transitink::WidgetSnapshotSet homeWakeLoadingSnapshots()",
+        )
+        assert_fragments_in_order(
+            self,
+            loading_snapshots,
+            "snapshot.values = {};",
+            "snapshot.valueCount = 0;",
+            "snapshot.state = transitink::WidgetState::Empty;",
+            'snapshot.providerMessage = "正在更新...";',
+            "snapshot.fetchedAtEpoch = 0;",
+            "snapshot.freshness = transitink::Freshness::Fresh;",
+        )
+        background_refresh = cpp_function_body(main, "void serviceHomeWakeRefresh()")
+        assert_fragments_in_order(
+            self,
+            background_refresh,
+            "HomeWakeRefreshPhase::ConnectingWifi",
+            "HomeWakeRefreshPhase::WaitingForTime",
+            "refreshClockNow();",
+            "HomeWakeRefreshPhase::Widgets",
+            "homeWakeWidgetAttempts < static_cast<uint8_t>(transitink::kWidgetSlotCount)",
+            "serviceOneWidgetIfDue();",
+            "HomeWakeRefreshPhase::Weather",
+            "refreshWeatherNow();",
+        )
+        self.assertIn("homeWakeRefreshActive()", setup_body + read_text("src/main.cpp"))
+        self.assertIn('String("...")', display)
         sync_body = cpp_function_body(
             main,
             "void syncTimeAndWeatherBeforeDashboard(bool homeWake)",

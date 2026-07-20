@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PORT="${1:-${ESP32_PORT:-}}"
@@ -36,11 +37,12 @@ while [ "$OFFSET" -lt "$FLASH_SIZE" ]; do
   fi
   PART="$TMP_DIR/part-$(printf '%08x' "$OFFSET").bin"
   PARTS+=("$PART")
-  "$ROOT/.venv/bin/esptool.py" --chip "$CHIP" --port "$PORT" --baud "$BAUD" read_flash "$(printf '0x%x' "$OFFSET")" "$(printf '0x%x' "$THIS_SIZE")" "$PART"
+  "$ROOT/.venv/bin/esptool" --chip "$CHIP" --port "$PORT" --baud "$BAUD" read-flash "$(printf '0x%x' "$OFFSET")" "$(printf '0x%x' "$THIS_SIZE")" "$PART"
   OFFSET=$((OFFSET + THIS_SIZE))
 done
 
 cat "${PARTS[@]}" > "$OUT"
+chmod 600 "$OUT"
 
 SIZE="$(wc -c < "$OUT" | tr -d ' ')"
 if [ "$SIZE" != "$FLASH_SIZE" ]; then

@@ -8,6 +8,31 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class PortalJavaScriptBehaviorTests(unittest.TestCase):
+    def test_lan_portal_fetches_include_session_access_token(self):
+        source = (ROOT / "src/TransitInkPortalPage.cpp").read_text()
+        script = source.split("<script>", 1)[1].split("</script>", 1)[0]
+        script = script.split("byId('config_form').addEventListener", 1)[0]
+        harness = r"""
+let captured=null;
+global.fetch=(path,options)=>{captured={path,options};return Promise.resolve({ok:true,json:async()=>({})})};
+(async()=>{
+  await portalFetch('/api/config',{headers:{Accept:'application/json'}});
+  if(captured?.path!=='/api/config')throw new Error('要求路徑不正確');
+  if(captured?.options?.headers?.['X-TransitInk-Access']!=='SESSION123')throw new Error('沒有附加 LAN session token');
+  if(captured?.options?.headers?.Accept!=='application/json')throw new Error('覆蓋了原有 headers');
+  process.stdout.write('ok');
+})().catch(error=>{console.error(error);process.exitCode=1});
+"""
+        completed = subprocess.run(
+            ["node", "-e", "global.location={pathname:'/SESSION123'};" + script + harness],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            timeout=10,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(completed.stdout, "ok")
+
     def test_local_catalog_labels_are_escaped_before_rendering(self):
         source = (ROOT / "src/TransitInkPortalPage.cpp").read_text()
         script = source.split("<script>", 1)[1].split("</script>", 1)[0]

@@ -743,7 +743,10 @@ def validate_release(payloads: dict[str, bytes], manifest: dict[str, Any]) -> No
     if total > MAX_RELEASE_BYTES:
         raise CatalogError(f"完整目錄 {total} bytes 超過 1.25 MiB")
     for asset_name, content in payloads.items():
-        if manifest["assets"][asset_name]["sha256"] != sha256_bytes(content):
+        asset_metadata = manifest.get("assets", {}).get(asset_name, {})
+        if asset_metadata.get("bytes") != len(content):
+            raise CatalogError(f"{asset_name} 大小不一致")
+        if asset_metadata.get("sha256") != sha256_bytes(content):
             raise CatalogError(f"{asset_name} SHA-256 不一致")
         try:
             decoded = json.loads(gzip.decompress(content).decode("utf-8"))
@@ -788,6 +791,24 @@ def check_outputs(output: Path, payloads: dict[str, bytes], manifest: dict[str, 
         raise CatalogError("生成資源不是最新版本：" + ", ".join(failures))
 
 
+def check_committed_outputs(output: Path) -> tuple[dict[str, bytes], dict[str, Any]]:
+    manifest_path = output / "catalog-manifest.json"
+    if not manifest_path.is_file():
+        raise CatalogError(f"缺少已提交目錄 manifest：{manifest_path}")
+    manifest = read_json(manifest_path)
+    if not isinstance(manifest, dict):
+        raise CatalogError("已提交目錄 manifest 格式不正確")
+    payloads: dict[str, bytes] = {}
+    for name in ASSET_NAMES:
+        path = output / name
+        if not path.is_file():
+            raise CatalogError(f"缺少已提交目錄資源：{path}")
+        payloads[name] = path.read_bytes()
+    validate_release(payloads, manifest)
+    check_outputs(output, payloads, manifest)
+    return payloads, manifest
+
+
 def parse_args(argv: Iterable[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--refresh", action="store_true", help="download official sources")
@@ -806,19 +827,19 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
 def main(argv: Iterable[str] = sys.argv[1:]) -> int:
     args = parse_args(argv)
     try:
-        if args.refresh:
-            fetch_base_sources(args.cache_dir)
-            fetch_ctb_catalog(
-                args.cache_dir,
-                read_json(args.cache_dir / "ctb-routes.json"),
-                args.workers,
-            )
-            fetch_gmb_catalog(args.cache_dir, args.workers)
-        payloads, manifest = build_assets(args.cache_dir)
-        validate_release(payloads, manifest)
         if args.check:
-            check_outputs(args.output_dir, payloads, manifest)
+            payloads, manifest = check_committed_outputs(args.output_dir)
         else:
+            if args.refresh:
+                fetch_base_sources(args.cache_dir)
+                fetch_ctb_catalog(
+                    args.cache_dir,
+                    read_json(args.cache_dir / "ctb-routes.json"),
+                    args.workers,
+                )
+                fetch_gmb_catalog(args.cache_dir, args.workers)
+            payloads, manifest = build_assets(args.cache_dir)
+            validate_release(payloads, manifest)
             write_outputs(
                 args.output_dir,
                 payloads,

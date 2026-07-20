@@ -33,5 +33,5 @@ the board revision and verification performed in the pull request.
 Unless explicitly stated otherwise, contributions intentionally submitted for
 inclusion in TransitInk OS are accepted under the
 [Apache License 2.0](LICENSE), in accordance with section 5 of that licence.
-Review [the open-source checklist](docs/OPEN_SOURCE_CHECKLIST.md) and
-[public release guide](docs/PUBLIC_RELEASE.md) before publishing a release.
+Follow the release procedure in [Development](docs/DEVELOPMENT.md) before
+publishing a release.

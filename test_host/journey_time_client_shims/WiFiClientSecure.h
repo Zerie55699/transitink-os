@@ -35,6 +35,6 @@ public:
 
 class WiFiClientSecure {
 public:
-    void setInsecure() { ++gJourneyTimeHttp.tlsInsecureCalls; }
+    void setCACert(const char*) { ++gJourneyTimeHttp.tlsVerifiedCalls; }
     void stop() { ++gJourneyTimeHttp.tlsStopCalls; }
 };

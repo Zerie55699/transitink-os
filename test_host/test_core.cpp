@@ -73,6 +73,17 @@ int main() {
     assert(!configButtonDetector.update(true, false, 3000));
     assert(!configButtonDetector.update(false, false, 5001));
 
+    bus_eta::DebouncedButtonPressDetector homeButtonDetector(30);
+    assert(!homeButtonDetector.update(false, 6000));
+    assert(!homeButtonDetector.update(true, 6100));
+    assert(!homeButtonDetector.update(true, 6129));
+    assert(homeButtonDetector.update(true, 6130));
+    assert(!homeButtonDetector.update(true, 6200));
+    assert(!homeButtonDetector.update(false, 6300));
+    assert(!homeButtonDetector.update(false, 6330));
+    assert(!homeButtonDetector.update(true, 6400));
+    assert(homeButtonDetector.update(true, 6430));
+
     bus_eta::SleepSettings sleepSettings;
     assert(sleepSettings.enabled);
     assert(sleepSettings.wakeDurationMinutes == 5);
@@ -89,6 +100,20 @@ int main() {
     assert(bus_eta::sleepMaintenanceIntervalUs(sleepSettings) == 43200000000ULL);
     sleepSettings.maintenanceHours = 0;
     assert(bus_eta::sleepMaintenanceIntervalUs(sleepSettings) == 0);
+
+    using bus_eta::SleepResumeAction;
+    assert(bus_eta::decideSleepResumeAction(false, false, false, false, false) ==
+           SleepResumeAction::NormalBoot);
+    assert(bus_eta::decideSleepResumeAction(true, false, false, false, false) ==
+           SleepResumeAction::ResumeSleep);
+    assert(bus_eta::decideSleepResumeAction(true, false, false, false, true) ==
+           SleepResumeAction::ShowDashboard);
+    assert(bus_eta::decideSleepResumeAction(true, false, false, true, false) ==
+           SleepResumeAction::ShowDashboard);
+    assert(bus_eta::decideSleepResumeAction(true, false, true, false, false) ==
+           SleepResumeAction::ShowDashboard);
+    assert(bus_eta::decideSleepResumeAction(true, true, false, false, true) ==
+           SleepResumeAction::RunMaintenance);
 
     assert(bus_eta::batteryPercentFromMillivolts(0) == 0);
     assert(bus_eta::batteryPercentFromMillivolts(3200) == 0);

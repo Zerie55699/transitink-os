@@ -4,6 +4,14 @@ TransitInk OS is an ESP32-S3 firmware for a 400×300 e-paper transit dashboard,
 developed for the Zectrix Note 4 hardware profile. It displays four independently
 configured widgets and includes an on-device Traditional Chinese settings portal.
 
+## Zectrix Note 4 demo
+
+![Zectrix Note 4 running TransitInk OS](installer/assets/zectrix-note4-product.png)
+
+TransitInk OS is an independent open-source project and is not affiliated with
+or endorsed by Zectrix. TransitInk OS 是獨立開源專案，與 Zectrix 沒有從屬或認可關係。
+Zectrix and its product names remain the property of their respective owner.
+
 Supported widgets:
 
 - Bus ETA for KMB, Long Win Bus, and Citybus
@@ -15,7 +23,9 @@ TransitInk OS source code is licensed under the
 [Apache License 2.0](LICENSE). Redistributable fonts, generated glyphs, vendored
 components, and transport data retain the separate terms recorded in
 [Third-party notices](THIRD_PARTY_NOTICES.md) and
-[Third-party data](THIRD_PARTY_DATA.md).
+[Third-party data](THIRD_PARTY_DATA.md). Binary-release recipients can also use
+[Corresponding source and rebuild information](CORRESPONDING_SOURCE.md) to
+reproduce the firmware with the pinned Arduino core and libraries.
 
 ## Quick start
 
@@ -24,10 +34,12 @@ toolchain are required.
 
 ```bash
 scripts/install_tools.sh
+scripts/audit_python_tools.sh
 .venv/bin/python scripts/generate_hk_glyph_font.py --check
 .venv/bin/python scripts/generate_transit_route_catalog.py --check
 python3 -m unittest discover -s tests -p "test_*.py" -q
 PLATFORMIO_CORE_DIR="$PWD/.platformio" .venv/bin/platformio run -e zectrix_note4
+PLATFORMIO_CORE_DIR="$PWD/.platformio" .venv/bin/platformio check -e zectrix_note4 --fail-on-defect high
 ```
 
 Before replacing the firmware, set the serial port and create a full 16 MiB
@@ -50,9 +62,20 @@ the board, flash size, and serial port before running either operation.
 
 ## First boot
 
-When no valid settings exist, the device starts a `TransitInk-xxxx` Wi-Fi access
-point. Connect to it, open `http://192.168.4.1/`, enter the Wi-Fi settings, and
-configure four ordered widget slots. A slot may also be disabled.
+When no valid settings exist, the device starts a WPA2-protected
+`TransitInk-xxxx` Wi-Fi access point. Its randomly generated password is shown
+on the device. Connect to it, open `http://192.168.4.1/`, enter the Wi-Fi
+settings, and configure four ordered widget slots. A slot may also be disabled.
+The settings access point remains available until setup is saved or the device
+is restarted.
+
+After the device has joined its configured Wi-Fi, pressing the Volume button
+opens the settings portal on the device's current LAN IP instead of creating the
+setup access point. The display shows the local address and a QR code containing
+a random session path. The portal remains available until settings are saved,
+the device is restarted, or Volume is pressed again. If normal Wi-Fi is
+unavailable, the device falls back to the protected `TransitInk-xxxx` access
+point.
 
 TransitInk OS refreshes MTR every 30 seconds, bus and Green Minibus arrivals
 every 60 seconds, and journey time every 120 seconds. Green Minibus setup uses
@@ -97,7 +120,7 @@ scripts/        setup, font generation, backup, flash, and restore tools
 test_host/      native C++ behaviour tests and bounded API fixtures
 test_native/    PlatformIO Unity tests and Arduino compatibility shims
 tests/          Python structure tests and native-test orchestration
-docs/           architecture, development, and historical design notes
+docs/           architecture, development, and hardware extension guides
 ```
 
 See [Project structure](docs/PROJECT_STRUCTURE.md) for module boundaries and
@@ -129,9 +152,10 @@ PLATFORMIO_CORE_DIR="$PWD/.platformio" \
 
 Generated Pages content is written to `dist/installer/` and is not committed.
 Pushing a `vX.Y.Z` tag whose version matches `FIRMWARE_VERSION` publishes the
-merged image and checksum as GitHub Release assets, then deploys the same package
-through GitHub Pages. The canonical installer is
-[https://wongshingg.github.io/transitink-os/](https://wongshingg.github.io/transitink-os/).
+merged image, checksum, legal notices and a downloadable firmware bundle as
+GitHub Release assets, then deploys the same package through GitHub Pages. The
+canonical installer is
+[https://zerie55699.github.io/transitink-os/](https://zerie55699.github.io/transitink-os/).
 
 ## Contributing
 

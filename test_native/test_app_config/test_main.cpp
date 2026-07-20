@@ -421,6 +421,35 @@ void test_portal_save_auth_rejects_cross_site_and_invalid_tokens() {
         "application/json", expected, ""));
 }
 
+void test_portal_ap_password_and_request_source_are_restricted() {
+    const std::string password = transitink::generatePortalApPassword(
+        0x01234567U, 0x89abcdefU, 0xfedcba98U);
+    TEST_ASSERT_EQUAL_UINT32(12, password.size());
+    TEST_ASSERT_TRUE(
+        password.find_first_not_of("23456789ABCDEFGHJKLMNPQRSTUVWXYZ") ==
+        std::string::npos);
+    TEST_ASSERT_TRUE(password != transitink::generatePortalApPassword(1U, 2U, 3U));
+
+    TEST_ASSERT_TRUE(transitink::isPortalRequestSourceAllowed(
+        "192.168.4.1", "", "192.168.4.1", false));
+    TEST_ASSERT_TRUE(transitink::isPortalRequestSourceAllowed(
+        "192.168.4.1:80", "http://192.168.4.1", "192.168.4.1", true));
+    TEST_ASSERT_FALSE(transitink::isPortalRequestSourceAllowed(
+        "192.168.4.1", "", "192.168.4.1", true));
+    TEST_ASSERT_FALSE(transitink::isPortalRequestSourceAllowed(
+        "attacker.example", "", "192.168.4.1", false));
+    TEST_ASSERT_FALSE(transitink::isPortalRequestSourceAllowed(
+        "192.168.4.1", "http://attacker.example", "192.168.4.1", true));
+    TEST_ASSERT_FALSE(transitink::isPortalRequestSourceAllowed(
+        "192.168.4.1:invalid", "", "192.168.4.1", false));
+    TEST_ASSERT_TRUE(transitink::isPortalAccessTokenAuthorized(
+        "SESSIONTOKEN", "SESSIONTOKEN"));
+    TEST_ASSERT_FALSE(transitink::isPortalAccessTokenAuthorized(
+        "WRONGTOKEN", "SESSIONTOKEN"));
+    TEST_ASSERT_FALSE(transitink::isPortalAccessTokenAuthorized(
+        "", "SESSIONTOKEN"));
+}
+
 }  // namespace
 
 void setUp() {}
@@ -442,5 +471,6 @@ int main(int, char**) {
     RUN_TEST(test_portal_failed_save_does_not_mutate_live_config);
     RUN_TEST(test_portal_successful_four_widget_save_survives_reboot_load);
     RUN_TEST(test_portal_save_auth_rejects_cross_site_and_invalid_tokens);
+    RUN_TEST(test_portal_ap_password_and_request_source_are_restricted);
     return UNITY_END();
 }

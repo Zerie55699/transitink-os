@@ -16,6 +16,7 @@ public:
     void refreshClock(const transitink::WidgetSnapshotSet& snapshots, const WeatherSnapshot& weather);
     void refreshWeatherFooter(const transitink::WidgetSnapshotSet& snapshots, const WeatherSnapshot& weather);
     void showSleep(const transitink::WidgetSnapshotSet& snapshots, const WeatherSnapshot& weather);
+    void refreshSleepStatusAndWeather(const transitink::WidgetSnapshotSet& snapshots, const WeatherSnapshot& weather);
     void prepareForSleep();
 
 private:

@@ -147,8 +147,7 @@ These paths are deliberately excluded from Git:
 - `.test-build/` — native test executables and objects
 - `backups/` — full device flash images, which may contain credentials
 - `dist/` — generated release assets and deployable installer package
-- `.superpowers/` and `cat-silhouette-picker.html` — local design work
-- `zectrix-note4-installer/` — ignored legacy clone of the former installer repo
+- `.superpowers/` — local agent workspace
 
 Tracked generated glyph and catalog C++ sources are required by the firmware
 build. Their generators, deterministic inputs, gzip assets, manifests and

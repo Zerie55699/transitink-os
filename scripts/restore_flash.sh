@@ -21,4 +21,4 @@ if [ "$SIZE" != "$FLASH_SIZE" ]; then
   exit 1
 fi
 
-"$ROOT/.venv/bin/esptool.py" --chip "$CHIP" --port "$PORT" --baud "$BAUD" write_flash 0 "$BIN"
+"$ROOT/.venv/bin/esptool" --chip "$CHIP" --port "$PORT" --baud "$BAUD" write-flash 0 "$BIN"

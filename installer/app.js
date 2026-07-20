@@ -6,11 +6,9 @@ const firmwareVersion = document.querySelector("#firmware-version");
 
 const fields = {
   heroName: document.querySelector("#hero-device-name"),
-  heroStatus: document.querySelector("#hero-device-status"),
   heroFigure: document.querySelector("#hero-device-figure"),
   heroImage: document.querySelector("#hero-device-image"),
   selectedName: document.querySelector("#selected-device-name"),
-  selectedStatus: document.querySelector("#selected-device-status"),
 };
 
 let devices = [];
@@ -53,9 +51,7 @@ async function loadVersion(manifestUrl) {
 
 function applyDevice(device) {
   setText(fields.heroName, device.name);
-  setText(fields.heroStatus, device.status_label);
   setText(fields.selectedName, device.name);
-  setText(fields.selectedStatus, device.status_label);
 
   if (typeof device.image === "string" && device.image) {
     fields.heroImage.src = device.image;
@@ -111,11 +107,10 @@ try {
     {
       id: "zectrix_note4",
       name: "Zectrix Note 4",
-      status_label: "正式支援",
       chip_family: "ESP32-S3",
       display: "400 × 300 電子紙",
       connection: "USB-C 數據線",
-      image: "./assets/zectrix-note4-demo.png?v=ab2a968a",
+      image: "./assets/zectrix-note4-product.png?v=1050ddeb",
       image_alt: "顯示 TransitInk OS 交通資訊的 Zectrix Note 4 裝置產品圖",
       manifest: "./manifest.json",
       installable: true,

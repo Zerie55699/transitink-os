@@ -1,4 +1,5 @@
 #include "KmbClient.h"
+#include "TransitTlsTrust.h"
 
 #include "TransitJsonParsers.h"
 #include "core/CatalogCore.h"
@@ -49,7 +50,7 @@ std::string toStdString(JsonVariantConst value) {
 
 bool KmbClient::httpGet(const String& url, String& body, String& error) {
     WiFiClientSecure tls;
-    tls.setInsecure();
+    transitink::configureVerifiedTls(tls);
     HTTPClient http;
     http.setTimeout(10000);
     http.setReuse(false);
@@ -73,7 +74,7 @@ bool KmbClient::httpGetBounded(const String& url,
                                String& body,
                                String& error) {
     WiFiClientSecure tls;
-    tls.setInsecure();
+    transitink::configureVerifiedTls(tls);
     HTTPClient http;
     http.setTimeout(10000);
     http.setReuse(false);
@@ -110,7 +111,7 @@ bool KmbClient::fetchRoutesJson(String& body, String& error) {
 
 bool KmbClient::fetchRoutesToFile(fs::FS& fs, const char* path, String& error) {
     WiFiClientSecure tls;
-    tls.setInsecure();
+    transitink::configureVerifiedTls(tls);
     HTTPClient http;
     http.setTimeout(20000);
     http.setReuse(false);
@@ -140,7 +141,7 @@ bool KmbClient::fetchRoutesToFile(fs::FS& fs, const char* path, String& error) {
         http.end();
         return false;
     }
-    WiFiClient* stream = http.getStreamPtr();
+    auto* stream = http.getStreamPtr();
     uint8_t buffer[1024];
     size_t copied = 0;
     unsigned long lastDataAt = millis();
@@ -201,7 +202,7 @@ bool KmbClient::fetchRoutesToFile(fs::FS& fs, const char* path, String& error) {
 
 bool KmbClient::fetchStopsToFile(fs::FS& fs, const char* path, String& error) {
     WiFiClientSecure tls;
-    tls.setInsecure();
+    transitink::configureVerifiedTls(tls);
     HTTPClient http;
     http.setTimeout(20000);
     http.setReuse(false);
@@ -231,7 +232,7 @@ bool KmbClient::fetchStopsToFile(fs::FS& fs, const char* path, String& error) {
         http.end();
         return false;
     }
-    WiFiClient* stream = http.getStreamPtr();
+    auto* stream = http.getStreamPtr();
     uint8_t buffer[1024];
     size_t copied = 0;
     unsigned long lastDataAt = millis();

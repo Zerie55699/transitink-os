@@ -17,10 +17,13 @@ public:
     void loop();
     bool isApMode() const { return apMode_; }
     bool isStarted() const { return serverStarted_; }
+    const String& apPassword() const { return apPassword_; }
+    String pageUrl() const;
 
 private:
     void startAp();
     void registerRoutes();
+    bool authorizePortalRequest(bool validateOrigin);
     void sendIndex();
     void sendConfig();
     void saveConfig();
@@ -43,6 +46,7 @@ private:
     void refreshRoute();
     void sendCatalogResult(bool ok, const String& json, const String& error);
     void sendText(int code, const String& contentType, const String& body);
+    IPAddress portalIp() const;
 
     DeviceConfig& config_;
     ConfigStore& store_;
@@ -54,4 +58,6 @@ private:
     bool routesRegistered_ = false;
     bool serverStarted_ = false;
     String csrfToken_;
+    String apPassword_;
+    String accessToken_;
 };

@@ -1,4 +1,5 @@
 #include "MtrClient.h"
+#include "TransitTlsTrust.h"
 
 #include "TransitCatalog.h"
 #include "TransitJsonParsers.h"
@@ -31,7 +32,7 @@ bool MtrClient::fetchArrivals(
     }
 
     WiFiClientSecure tls;
-    tls.setInsecure();
+    transitink::configureVerifiedTls(tls);
     HTTPClient http;
     http.setTimeout(10000);
     http.setReuse(false);

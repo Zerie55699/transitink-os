@@ -1,6 +1,7 @@
 #include "JourneyTimeClient.h"
 
 #include "TransitCatalog.h"
+#include "TransitTlsTrust.h"
 #include "core/JourneyTimeXmlParser.h"
 
 #include <HTTPClient.h>
@@ -41,7 +42,7 @@ JourneyTimeFetchOutcome JourneyTimeClient::fetchJourneyTime(
     }
 
     WiFiClientSecure tls;
-    tls.setInsecure();
+    transitink::configureVerifiedTls(tls);
     HTTPClient http;
     HttpCleanup cleanup{http, tls};
     http.setTimeout(JourneyTimeClient::kTimeoutMs);
@@ -58,7 +59,7 @@ JourneyTimeFetchOutcome JourneyTimeClient::fetchJourneyTime(
     if (remaining > static_cast<int>(kMaxResponseBytes)) {
         return failure(error, "行車時間資料過大");
     }
-    WiFiClient* stream = http.getStreamPtr();
+    auto* stream = http.getStreamPtr();
     if (stream == nullptr) {
         return failure(error, "未能讀取行車時間資料");
     }

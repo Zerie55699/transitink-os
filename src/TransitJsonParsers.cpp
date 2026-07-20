@@ -518,11 +518,12 @@ bool parseGmbEtaJson(const char* json,
     payload.enabled = data["enabled"].as<bool>();
     for (JsonObjectConst eta : data["eta"].as<JsonArrayConst>()) {
         transitink::GmbEtaRecord record;
-        if (!readRequiredInt(eta["diff"], record.diffMinutes) ||
-            record.diffMinutes < 0 ||
+        int diffMinutes = -1;
+        if (!readRequiredInt(eta["diff"], diffMinutes) || diffMinutes < 0 ||
             !readNullableString(eta, "remarks_tc", record.remarkTc)) {
             continue;
         }
+        record.diffMinutes = diffMinutes;
         payload.records.push_back(std::move(record));
     }
     return true;

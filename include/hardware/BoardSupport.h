@@ -3,13 +3,16 @@
 namespace transitink::hardware {
 
 void configureButtons();
+bool startButtonMonitoring();
 bool homeButtonPressed();
-bool configButtonPressed();
 bool factoryResetUpButtonPressed();
 bool factoryResetDownButtonPressed();
+bool takeConfigClick();
+void clearPendingConfigClick();
+bool takeFactoryResetHold();
+bool takeHomePress();
+void clearPendingHomePress();
 void configureHomeWakeup();
 void disableHomeWakeup();
-void configureChargeWakeup();
-void disableChargeWakeup();
 
 }  // namespace transitink::hardware

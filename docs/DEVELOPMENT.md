@@ -12,10 +12,13 @@ installs the pinned PlatformIO and esptool versions:
 
 ```bash
 scripts/install_tools.sh
+scripts/audit_python_tools.sh
 ```
 
 PlatformIO packages are kept under `.platformio/` so builds do not depend on a
-developer's global PlatformIO state.
+developer's global PlatformIO state. The firmware platform is pinned to
+pioarduino 55.03.39 (Arduino ESP32 3.3.9 / ESP-IDF 5.5.4), while all directly
+declared libraries use exact versions.
 
 ## Test
 
@@ -27,6 +30,13 @@ python3 -m unittest discover -s tests -p "test_*.py" -q
 
 The suite expects `.venv/bin/platformio` to exist, so run the setup script once
 before the first test.
+
+Run the same high-severity C/C++ static-analysis gate used by CI and releases:
+
+```bash
+PLATFORMIO_CORE_DIR="$PWD/.platformio" \
+  .venv/bin/platformio check -e zectrix_note4 --fail-on-defect high
+```
 
 ## Build
 
@@ -44,7 +54,8 @@ committed.
 
 Always back up a device before its first TransitInk flash. The backup is a full
 16 MiB image and may contain Wi-Fi credentials or other device state, so it must
-remain under the ignored `backups/` directory.
+remain under the ignored `backups/` directory. The helper creates backup files
+with owner-only permissions; preserve those permissions when copying a backup.
 
 ```bash
 export ESP32_PORT=/dev/cu.usbmodemXXXX
@@ -121,6 +132,9 @@ The output under `dist/installer/` includes the versioned merged image,
 ignored because releases are reproducibly generated from source. Do not copy
 the nested `.git` directory from the ignored legacy installer clone.
 
-To publish, update `FIRMWARE_VERSION`, complete the release checklist, commit a
-clean tree, and push a matching `vX.Y.Z` tag. The release workflow tests and
-builds from the tag before publishing any asset or deploying GitHub Pages.
+Before publishing, update `FIRMWARE_VERSION` and `CHANGELOG.md`, review the
+third-party notices and catalog attribution, run the checks above from a clean
+checkout, scan both the working tree and Git history for secrets, and verify the
+candidate on its supported hardware. Commit the reviewed tree and push a
+matching `vX.Y.Z` tag. The release workflow tests and builds from the tag before
+publishing any asset or deploying GitHub Pages.

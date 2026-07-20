@@ -24,7 +24,3 @@ dist/
 
 # Local design/agent workspaces
 .superpowers/
-/cat-silhouette-picker.html
-
-# Legacy local clone of the former standalone installer repository.
-/zectrix-note4-installer/

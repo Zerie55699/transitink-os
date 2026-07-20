@@ -1,3 +1,7 @@
+// Modified by TransitInk OS, 2026: Traditional Chinese dialog copy and
+// same-origin imports. Based on ESP Web Tools 10.2.1 (Apache-2.0).
+// Upstream: https://github.com/esphome/esp-web-tools
+
 import {
   y as baseStyles,
   a as css,
@@ -5,7 +9,7 @@ import {
   t as customElement,
   i as LitElement,
   x as html,
-} from "https://unpkg.com/esp-web-tools@10.2.1/dist/web/styles-sT2V1cOw.js?module";
+} from "./vendor/styles-sT2V1cOw.js";
 
 let NoPortPickedDialog = class extends LitElement {
   render() {

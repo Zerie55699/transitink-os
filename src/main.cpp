@@ -5,6 +5,7 @@
 #include <WiFi.h>
 #include <esp_sntp.h>
 #include <esp_sleep.h>
+#include <esp_system.h>
 #include <esp_wifi.h>
 #include <ctime>
 
@@ -61,11 +62,6 @@ unsigned long nextWeatherRefreshMs = 0;
 unsigned long wakeStartedAtMs = 0;
 unsigned long lastChargeStatusPollMs = 0;
 bus_eta::BatterySnapshot chargeSnapshot;
-bus_eta::DualButtonHoldDetector factoryResetDetector(
-    transitink::hardware::kBoardProfile.buttons.factoryResetHoldMs);
-bus_eta::SingleButtonClickDetector configButtonDetector(
-    transitink::hardware::kBoardProfile.buttons.configDebounceMs,
-    transitink::hardware::kBoardProfile.buttons.configMaxClickMs);
 bool factoryResetPendingRestart = false;
 bool factoryResetApplied = false;
 bool configAccessMode = false;
@@ -73,6 +69,18 @@ bool dashboardVisible = false;
 bool sleepMaintenanceWake = false;
 bool sleepScreenPrepared = false;
 bool chargeStatusLogged = false;
+enum class HomeWakeRefreshPhase : uint8_t {
+    Idle,
+    ConnectingWifi,
+    WaitingForTime,
+    Widgets,
+    Weather,
+};
+HomeWakeRefreshPhase homeWakeRefreshPhase = HomeWakeRefreshPhase::Idle;
+unsigned long homeWakePhaseStartedMs = 0;
+uint8_t homeWakeWidgetAttempts = 0;
+constexpr uint32_t kHomeWakeWifiTimeoutMs = 15000;
+constexpr uint32_t kHomeWakeTimeTimeoutMs = 2000;
 constexpr uint32_t kSleepResumeMarker = 0x54524E53U;
 RTC_NOINIT_ATTR uint32_t sleepResumeMarker;
 RTC_NOINIT_ATTR uint32_t sleepResumeMarkerInverse;
@@ -85,7 +93,12 @@ void returnToDashboard();
 void refreshWeatherNow();
 void refreshAllWidgetsNow();
 void serviceOneWidgetIfDue();
+void startHomeWakeRefresh();
+void serviceHomeWakeRefresh();
+void finishHomeWakeRefresh();
+bool homeWakeRefreshActive();
 transitink::WidgetSnapshotSet currentDisplaySnapshots();
+transitink::WidgetSnapshotSet homeWakeLoadingSnapshots();
 bool hasValidTime();
 void syncTimeAndWeatherBeforeDashboard(bool homeWake);
 bus_eta::SleepSettings sleepSettingsFromConfig();
@@ -114,8 +127,7 @@ bool connectWifi(const DeviceConfig& config) {
     }
     WiFi.mode(WIFI_STA);
     WiFi.begin(config.wifiSsid.c_str(), config.wifiPassword.c_str());
-    Serial.print("Connecting Wi-Fi SSID: ");
-    Serial.println(config.wifiSsid);
+    Serial.println("Connecting to configured Wi-Fi");
     unsigned long started = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - started < 15000) {
         serviceFactoryResetButtons();
@@ -218,6 +230,24 @@ transitink::WidgetSnapshotSet currentDisplaySnapshots() {
     return widgetScheduler.displaySnapshots(nowEpoch);
 }
 
+transitink::WidgetSnapshotSet homeWakeLoadingSnapshots() {
+    transitink::WidgetSnapshotSet snapshots = currentDisplaySnapshots();
+    for (auto& snapshot : snapshots) {
+        if (snapshot.type == transitink::WidgetType::Disabled) {
+            continue;
+        }
+        snapshot.values = {};
+        snapshot.valueCount = 0;
+        snapshot.state = transitink::WidgetState::Empty;
+        snapshot.providerMessage = "正在更新...";
+        snapshot.fetchedAtEpoch = 0;
+        snapshot.dataAtEpoch = 0;
+        snapshot.freshness = transitink::Freshness::Fresh;
+        snapshot.consecutiveFailures = 0;
+    }
+    return snapshots;
+}
+
 void refreshAllWidgetsNow() {
     Serial.println("Widget refresh all start");
     const uint32_t nowMs = millis();
@@ -246,6 +276,93 @@ void serviceOneWidgetIfDue() {
     einkDisplay.refreshWidgetLane(tick.slot, currentDisplaySnapshots(), weatherSnapshot);
 }
 
+bool homeWakeRefreshActive() {
+    return homeWakeRefreshPhase != HomeWakeRefreshPhase::Idle;
+}
+
+void finishHomeWakeRefresh() {
+    if (!homeWakeRefreshActive()) {
+        return;
+    }
+    homeWakeRefreshPhase = HomeWakeRefreshPhase::Idle;
+    clearPersistentSleepResumeMarker();
+    Serial.println("Home wake background refresh complete");
+}
+
+void startHomeWakeRefresh() {
+    Serial.println("Home wake: restore dashboard before network refresh");
+    wakeStartedAtMs = millis();
+    homeWakeWidgetAttempts = 0;
+    widgetScheduler.forceAllDue(wakeStartedAtMs);
+    einkDisplay.showDashboard(homeWakeLoadingSnapshots(), weatherSnapshot);
+    dashboardVisible = true;
+    scheduleNextClockRefresh();
+
+    if (deviceConfig.wifiSsid.isEmpty()) {
+        weatherSnapshot.valid = false;
+        weatherSnapshot.error = "Wi-Fi 未連接";
+        scheduleNextWeatherRefresh(60);
+        homeWakeRefreshPhase = HomeWakeRefreshPhase::Weather;
+        finishHomeWakeRefresh();
+        return;
+    }
+
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(deviceConfig.wifiSsid.c_str(), deviceConfig.wifiPassword.c_str());
+    homeWakePhaseStartedMs = millis();
+    homeWakeRefreshPhase = HomeWakeRefreshPhase::ConnectingWifi;
+    Serial.println("Home wake: Wi-Fi connection started in background");
+}
+
+void serviceHomeWakeRefresh() {
+    const uint32_t nowMs = millis();
+    switch (homeWakeRefreshPhase) {
+        case HomeWakeRefreshPhase::Idle:
+            return;
+        case HomeWakeRefreshPhase::ConnectingWifi:
+            if (WiFi.status() == WL_CONNECTED) {
+                Serial.println("Home wake: Wi-Fi connected");
+                configTzTime("HKT-8", "pool.ntp.org", "time.cloudflare.com", "time.nist.gov");
+                homeWakePhaseStartedMs = nowMs;
+                homeWakeRefreshPhase = HomeWakeRefreshPhase::WaitingForTime;
+                return;
+            }
+            if (nowMs - homeWakePhaseStartedMs >= kHomeWakeWifiTimeoutMs) {
+                Serial.println("Home wake: Wi-Fi connection timed out");
+                weatherSnapshot.valid = false;
+                weatherSnapshot.error = "Wi-Fi 未連接";
+                scheduleNextWeatherRefresh(60);
+                finishHomeWakeRefresh();
+            }
+            return;
+        case HomeWakeRefreshPhase::WaitingForTime:
+            if (hasValidTime() || nowMs - homeWakePhaseStartedMs >= kHomeWakeTimeTimeoutMs) {
+                refreshClockNow();
+                homeWakeRefreshPhase = HomeWakeRefreshPhase::Widgets;
+            }
+            return;
+        case HomeWakeRefreshPhase::Widgets:
+            if (WiFi.status() != WL_CONNECTED) {
+                WiFi.reconnect();
+                homeWakePhaseStartedMs = nowMs;
+                homeWakeRefreshPhase = HomeWakeRefreshPhase::ConnectingWifi;
+                return;
+            }
+            if (homeWakeWidgetAttempts < static_cast<uint8_t>(transitink::kWidgetSlotCount) &&
+                widgetScheduler.hasPendingDue(nowMs)) {
+                ++homeWakeWidgetAttempts;
+                serviceOneWidgetIfDue();
+                return;
+            }
+            homeWakeRefreshPhase = HomeWakeRefreshPhase::Weather;
+            return;
+        case HomeWakeRefreshPhase::Weather:
+            refreshWeatherNow();
+            finishHomeWakeRefresh();
+            return;
+    }
+}
+
 bus_eta::SleepSettings sleepSettingsFromConfig() {
     bus_eta::SleepSettings settings;
     settings.enabled = deviceConfig.sleepEnabled;
@@ -264,7 +381,8 @@ void stopNetworkForSleep() {
 void configureLightSleepWakeup() {
     esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
     transitink::hardware::configureHomeWakeup();
-    transitink::hardware::configureChargeWakeup();
+    // Charge state is polled while awake. It must not be able to impersonate
+    // a Home press and expose the dashboard while the device is sleeping.
 
     const unsigned long long maintenanceUs = bus_eta::sleepMaintenanceIntervalUs(sleepSettingsFromConfig());
     if (maintenanceUs > 0) {
@@ -313,23 +431,14 @@ void returnFromLightSleep() {
     serviceChargeStatus(true);
     einkDisplay.begin(false);
     sleepScreenPrepared = false;
-    wakeStartedAtMs = millis();
-    bool wifiOk = connectWifi(deviceConfig);
-    if (wifiOk) {
-        syncTimeAndWeatherBeforeDashboard(true);
-    } else {
-        weatherSnapshot.valid = false;
-        weatherSnapshot.error = "Wi-Fi 未連接";
-        scheduleNextWeatherRefresh(60);
-    }
-    refreshAllWidgetsNow();
-    clearPersistentSleepResumeMarker();
+    startHomeWakeRefresh();
 }
 
 void performLightSleepMaintenance() {
     Serial.println("Light sleep maintenance wake");
     setupFactoryResetButtons();
-    einkDisplay.begin(false);
+    dashboardVisible = false;
+    configAccessMode = false;
     bool wifiOk = connectWifi(deviceConfig);
     if (wifiOk) {
         syncTimeAndWeatherBeforeDashboard(false);
@@ -338,20 +447,8 @@ void performLightSleepMaintenance() {
         weatherSnapshot.error = "Wi-Fi 未連接";
         scheduleNextWeatherRefresh(60);
     }
-    const uint32_t nowMs = millis();
-    const int64_t nowEpoch = hasValidTime() ? static_cast<int64_t>(time(nullptr)) : 0;
-    widgetScheduler.forceAllDue(nowMs);
-    for (std::size_t attempts = 0;
-         attempts < transitink::kWidgetSlotCount && widgetScheduler.hasPendingDue(nowMs);
-         ++attempts) {
-        widgetScheduler.serviceNextDue(nowMs, nowEpoch);
-    }
-    const transitink::WidgetSnapshotSet sleepSnapshots =
-        widgetScheduler.displaySnapshots(nowEpoch);
-    dashboardVisible = false;
-    configAccessMode = false;
-    einkDisplay.showSleep(sleepSnapshots, weatherSnapshot);
     stopNetworkForSleep();
+    einkDisplay.refreshSleepStatusAndWeather(currentDisplaySnapshots(), weatherSnapshot);
     einkDisplay.prepareForSleep();
     sleepScreenPrepared = true;
 }
@@ -363,6 +460,7 @@ void enterSleepMode(const char* reason) {
     Serial.print("Entering sleep mode: ");
     Serial.println(reason);
     if (!sleepScreenPrepared) {
+        transitink::hardware::clearPendingHomePress();
         dashboardVisible = false;
         configAccessMode = false;
         einkDisplay.showSleep(currentDisplaySnapshots(), weatherSnapshot);
@@ -373,13 +471,22 @@ void enterSleepMode(const char* reason) {
     setupFactoryResetButtons();
 
     while (deviceConfig.sleepEnabled && !factoryResetPendingRestart) {
+        if (transitink::hardware::takeHomePress() ||
+            transitink::hardware::homeButtonPressed()) {
+            Serial.println("Home pressed while preparing sleep");
+            waitForHomeRelease();
+            if (!factoryResetPendingRestart) {
+                returnFromLightSleep();
+            }
+            return;
+        }
         configureLightSleepWakeup();
         armSleepResumeMarker();
         esp_err_t sleepResult = esp_light_sleep_start();
+        const esp_sleep_wakeup_cause_t wakeCause = esp_sleep_get_wakeup_cause();
         clearSleepResumeMarker();
         esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
         transitink::hardware::disableHomeWakeup();
-        transitink::hardware::disableChargeWakeup();
         setupFactoryResetButtons();
 
         if (sleepResult != ESP_OK) {
@@ -389,21 +496,18 @@ void enterSleepMode(const char* reason) {
             continue;
         }
 
-        const esp_sleep_wakeup_cause_t wakeCause = esp_sleep_get_wakeup_cause();
         Serial.print("Light sleep wake cause: ");
         Serial.println(static_cast<int>(wakeCause));
-        if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_GPIO) {
+        // configureLightSleepWakeup() clears every source before enabling only
+        // the Home GPIO and the optional maintenance timer.
+        if (wakeCause == ESP_SLEEP_WAKEUP_GPIO) {
             waitForHomeRelease();
             if (!factoryResetPendingRestart) {
                 returnFromLightSleep();
             }
             return;
         }
-        if (sleepMaintenanceWake) {
-            performLightSleepMaintenance();
-            continue;
-        }
-        if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) {
+        if (wakeCause == ESP_SLEEP_WAKEUP_TIMER) {
             performLightSleepMaintenance();
             continue;
         }
@@ -413,6 +517,9 @@ void enterSleepMode(const char* reason) {
 
 void setupFactoryResetButtons() {
     transitink::hardware::configureButtons();
+    if (!transitink::hardware::startButtonMonitoring()) {
+        Serial.println("Unable to start button monitor");
+    }
 }
 
 void applyFactoryReset() {
@@ -440,37 +547,28 @@ void serviceFactoryResetButtons() {
         }
         return;
     }
-    if (factoryResetDetector.update(upPressed, downPressed, millis())) {
+    if (transitink::hardware::takeFactoryResetHold()) {
         applyFactoryReset();
     }
 }
 
-String configPageUrl() {
-    if (WiFi.status() == WL_CONNECTED) {
-        return "http://" + WiFi.localIP().toString() + "/";
-    }
-    return "http://192.168.4.1/";
-}
-
-String currentWifiLabel() {
-    if (deviceConfig.wifiSsid.isEmpty()) {
-        return "未設定";
-    }
-    if (WiFi.status() == WL_CONNECTED) {
-        return deviceConfig.wifiSsid + "（已連接）";
-    }
-    return deviceConfig.wifiSsid + "（未連接）";
-}
-
 void showConfigAccessScreen() {
     Serial.println("Config button clicked");
-    configPortal.begin(WiFi.status() != WL_CONNECTED);
+    finishHomeWakeRefresh();
+    const bool useAccessPoint = WiFi.status() != WL_CONNECTED;
+    configPortal.begin(useAccessPoint);
     configAccessMode = true;
     dashboardVisible = false;
-    String configUrl = configPageUrl();
-    String networkName = WiFi.status() == WL_CONNECTED ? deviceConfig.wifiSsid : configApSsid();
-    String message = "裝置設定\n" + configUrl + "\n目前 Wi-Fi\n" + currentWifiLabel() + "\n掃描右方 QR Code";
-    einkDisplay.showConfigMode(networkName, message, configUrl);
+    const String configUrl = configPortal.pageUrl();
+    if (configPortal.isApMode()) {
+        const String message = "密碼：" + configPortal.apPassword() +
+                               "\n開啟 " + configUrl;
+        einkDisplay.showConfigMode(configApSsid(), message, configUrl);
+        return;
+    }
+    const String localUrl = "http://" + WiFi.localIP().toString() + "/";
+    const String message = "本機設定頁\n" + localUrl;
+    einkDisplay.showConfigMode(deviceConfig.wifiSsid, message, configUrl);
 }
 
 void returnToDashboard() {
@@ -489,15 +587,15 @@ void returnToDashboard() {
 }
 
 void serviceConfigButton() {
-    const bool configPressed = transitink::hardware::configButtonPressed();
-    const bool downPressed = transitink::hardware::factoryResetDownButtonPressed();
-    if (configButtonDetector.update(configPressed, downPressed || factoryResetPendingRestart, millis())) {
-        if (configAccessMode) {
-            returnToDashboard();
-        } else {
-            showConfigAccessScreen();
-        }
+    if (!transitink::hardware::takeConfigClick() || factoryResetPendingRestart) {
+        return;
     }
+    if (configAccessMode) {
+        returnToDashboard();
+    } else {
+        showConfigAccessScreen();
+    }
+    transitink::hardware::clearPendingConfigClick();
 }
 
 void serviceChargeStatus(bool force) {
@@ -535,17 +633,32 @@ void setup() {
     Serial.begin(115200);
     delay(200);
     const esp_sleep_wakeup_cause_t wakeCause = esp_sleep_get_wakeup_cause();
+    const esp_reset_reason_t resetReason = esp_reset_reason();
+    setupFactoryResetButtons();
+    const bool homePressedAtBoot = transitink::hardware::homeButtonPressed();
     const bool rtcResetWake = consumeSleepResumeMarker();
     const bool configStoreReady = configStore.begin();
     const bool persistentResetWake = configStoreReady && configStore.sleepResumePending();
     const bool resetWake = rtcResetWake || persistentResetWake;
-    sleepMaintenanceWake = esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER;
-    const bool homeWake = wakeCause == ESP_SLEEP_WAKEUP_GPIO || resetWake;
+    const bus_eta::SleepResumeAction sleepResumeAction =
+        bus_eta::decideSleepResumeAction(
+            resetWake,
+            wakeCause == ESP_SLEEP_WAKEUP_TIMER,
+            wakeCause == ESP_SLEEP_WAKEUP_GPIO,
+            homePressedAtBoot,
+            resetReason == ESP_RST_POWERON);
+    sleepMaintenanceWake =
+        sleepResumeAction == bus_eta::SleepResumeAction::RunMaintenance;
+    const bool homeWake =
+        sleepResumeAction == bus_eta::SleepResumeAction::ShowDashboard;
+    const bool resumeSleep =
+        sleepResumeAction == bus_eta::SleepResumeAction::ResumeSleep;
     Serial.print("Wake cause: ");
     Serial.println(static_cast<int>(wakeCause));
+    Serial.print("Reset reason: ");
+    Serial.println(static_cast<int>(resetReason));
     Serial.print("Reset wake marker: ");
     Serial.println(persistentResetWake ? "persistent" : (rtcResetWake ? "rtc" : "no"));
-    setupFactoryResetButtons();
     chargeMonitor.begin();
     serviceChargeStatus(true);
     // Keep the retained e-paper dashboard visible until fresh data is ready.
@@ -558,10 +671,13 @@ void setup() {
     if (!loaded || !hasUsableConfig(deviceConfig)) {
         Serial.println("Starting config portal: missing or invalid config");
         configPortal.begin(true);
+        configAccessMode = true;
+        const String configUrl = configPortal.pageUrl();
         einkDisplay.showConfigMode(
             configApSsid(),
-            String("連接此熱點\n開啟 http://192.168.4.1/\n完成 ") +
-                FIRMWARE_SHORT_NAME + " 設定");
+            String("密碼：") + configPortal.apPassword() +
+                "\n開啟 " + configUrl,
+            configUrl);
         return;
     }
 
@@ -574,9 +690,25 @@ void setup() {
         return;
     }
 
+    if (deviceConfig.sleepEnabled && resumeSleep) {
+        Serial.println("Unconfirmed sleep reset: returning to sleep");
+        clearPersistentSleepResumeMarker();
+        dashboardVisible = false;
+        configAccessMode = false;
+        sleepScreenPrepared = true;
+        enterSleepMode("unconfirmed sleep reset");
+        return;
+    }
+
+    if (homeWake) {
+        Serial.println("Config portal deferred until button press");
+        startHomeWakeRefresh();
+        return;
+    }
+
     bool wifiOk = connectWifi(deviceConfig);
     if (wifiOk) {
-        syncTimeAndWeatherBeforeDashboard(homeWake);
+        syncTimeAndWeatherBeforeDashboard(false);
     } else {
         weatherSnapshot.valid = false;
         weatherSnapshot.error = "Wi-Fi 未連接";
@@ -586,9 +718,6 @@ void setup() {
     Serial.println("Config portal deferred until button press");
     wakeStartedAtMs = millis();
     refreshAllWidgetsNow();
-    if (resetWake) {
-        clearPersistentSleepResumeMarker();
-    }
 }
 
 void loop() {
@@ -605,10 +734,13 @@ void loop() {
         return;
     }
     if (hasUsableConfig(deviceConfig)) {
-        const bool sleepBlocked = configAccessMode || chargeSnapshot.powerPresent;
+        const bool sleepBlocked = configAccessMode || chargeSnapshot.powerPresent ||
+                                  homeWakeRefreshActive();
         if (bus_eta::shouldAutoSleep(
                 sleepSettingsFromConfig(), wakeStartedAtMs, millis(), sleepBlocked)) {
             enterSleepMode("wake window expired");
+        } else if (homeWakeRefreshActive()) {
+            serviceHomeWakeRefresh();
         } else {
             if (millis() >= nextWeatherRefreshMs) {
                 refreshWeatherNow();

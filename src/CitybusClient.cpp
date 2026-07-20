@@ -1,4 +1,5 @@
 #include "CitybusClient.h"
+#include "TransitTlsTrust.h"
 
 #include "TransitJsonParsers.h"
 
@@ -37,7 +38,7 @@ private:
 
 bool CitybusClient::httpGet(const String& url, String& body, String& error) {
     WiFiClientSecure tls;
-    tls.setInsecure();
+    transitink::configureVerifiedTls(tls);
     HTTPClient http;
     http.setTimeout(10000);
     http.setReuse(false);
@@ -62,7 +63,7 @@ bool CitybusClient::httpGetBounded(const String& url,
                                    String& body,
                                    String& error) {
     WiFiClientSecure tls;
-    tls.setInsecure();
+    transitink::configureVerifiedTls(tls);
     HTTPClient http;
     http.setTimeout(10000);
     http.setReuse(false);
@@ -99,7 +100,7 @@ bool CitybusClient::httpGetToFile(const String& url,
                                   const char* path,
                                   String& error) {
     WiFiClientSecure tls;
-    tls.setInsecure();
+    transitink::configureVerifiedTls(tls);
     HTTPClient http;
     http.setTimeout(20000);
     http.setReuse(false);
@@ -128,7 +129,7 @@ bool CitybusClient::httpGetToFile(const String& url,
         http.end();
         return false;
     }
-    WiFiClient* stream = http.getStreamPtr();
+    auto* stream = http.getStreamPtr();
     uint8_t buffer[1024];
     std::size_t copied = 0;
     unsigned long lastDataAt = millis();
@@ -228,7 +229,7 @@ bool CitybusClient::fetchStopLabels(
     }
 
     WiFiClientSecure tls;
-    tls.setInsecure();
+    transitink::configureVerifiedTls(tls);
     HTTPClient http;
     http.setTimeout(10000);
     http.setReuse(true);
@@ -258,7 +259,7 @@ bool CitybusClient::fetchStopLabels(
         uint8_t body[transitink::kMaxCatalogObjectBytes + 1];
         std::size_t received = 0;
         unsigned long lastDataAt = millis();
-        WiFiClient* stream = http.getStreamPtr();
+        auto* stream = http.getStreamPtr();
         bool overflow = false;
         while (http.connected() &&
                (expectedLength < 0 || received < static_cast<std::size_t>(expectedLength))) {

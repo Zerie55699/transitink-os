@@ -81,6 +81,26 @@ int main() {
         FakeRouter router;
         WidgetSlots configs{};
         configs[0] = configFor(WidgetType::BusEta);
+        configs[0].bus.routeLabelTc = "11";
+        configs[0].bus.destinationLabelTc = "往中環";
+        configs[0].bus.stopLabelTc = "海壩村 (TW515)";
+
+        WidgetScheduler scheduler(router);
+        scheduler.configure(configs, 500);
+
+        const auto& placeholder = scheduler.snapshot(0);
+        assert(placeholder.type == WidgetType::BusEta);
+        assert(placeholder.title == "11 · 往中環");
+        assert(placeholder.subtitle == "海壩村");
+        assert(placeholder.fetchedAtEpoch == 0);
+        assert(placeholder.valueCount == 0);
+        assert(router.calls.empty());
+    }
+
+    {
+        FakeRouter router;
+        WidgetSlots configs{};
+        configs[0] = configFor(WidgetType::BusEta);
         configs[1] = configFor(WidgetType::MtrEta);
         configs[2] = configFor(WidgetType::JourneyTime);
         router.scripted[0] = {ready(0, WidgetType::BusEta, 1000, 1300, "巴士")};

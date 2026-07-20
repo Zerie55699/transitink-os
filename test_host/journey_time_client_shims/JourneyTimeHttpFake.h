@@ -23,7 +23,7 @@ struct FakeJourneyTimeHttpState {
     int getCalls = 0;
     int endCalls = 0;
     int tlsStopCalls = 0;
-    int tlsInsecureCalls = 0;
+    int tlsVerifiedCalls = 0;
     int timeoutMs = 0;
     bool reuse = true;
     std::string requestedUrl;

@@ -1,4 +1,5 @@
 #include "GmbClient.h"
+#include "TransitTlsTrust.h"
 
 #include "core/CatalogCore.h"
 
@@ -49,7 +50,7 @@ bool GmbClient::httpGetBounded(const String& url,
                                String& error) {
     body = "";
     WiFiClientSecure tls;
-    tls.setInsecure();
+    transitink::configureVerifiedTls(tls);
     HTTPClient http;
     http.setTimeout(10000);
     http.setReuse(false);

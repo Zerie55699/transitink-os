@@ -53,9 +53,8 @@ void WidgetScheduler::configure(const WidgetSlots& configs, uint32_t nowMs) {
     configs_ = configs;
     roundRobinCursor_ = 0;
     for (std::size_t index = 0; index < kWidgetSlotCount; ++index) {
-        snapshots_[index] = {};
-        snapshots_[index].slot = static_cast<uint8_t>(index);
-        snapshots_[index].type = configs_[index].type;
+        snapshots_[index] = configuredWidgetSnapshot(
+            static_cast<uint8_t>(index), configs_[index]);
         nextDueMs_[index] = configs_[index].type == WidgetType::Disabled ? 0 : nowMs;
     }
 }

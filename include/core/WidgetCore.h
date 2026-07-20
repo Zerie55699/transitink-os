@@ -34,6 +34,8 @@ struct WidgetSnapshot {
 
 using WidgetSnapshotSet = std::array<WidgetSnapshot, kWidgetSlotCount>;
 
+WidgetSnapshot configuredWidgetSnapshot(uint8_t slot, const WidgetConfig& config);
+
 struct ProviderResult {
     ProviderOutcome outcome;
     WidgetSnapshot snapshot;

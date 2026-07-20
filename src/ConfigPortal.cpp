@@ -13,7 +13,8 @@
 namespace {
 
 constexpr byte kDnsPort = 53;
-const char* kRequestHeaders[] = {"Content-Type", "X-TransitInk-CSRF"};
+const char* kRequestHeaders[] = {
+    "Content-Type", "X-TransitInk-CSRF", "X-TransitInk-Access", "Origin"};
 
 String generateCsrfToken() {
     char token[33];
@@ -38,22 +39,27 @@ String chipSuffix() {
 ConfigPortal::ConfigPortal(DeviceConfig& config,
                            ConfigStore& store,
                            WidgetCatalogService& catalog)
-    : config_(config), store_(store), catalog_(catalog), server_(80),
-      csrfToken_(generateCsrfToken()) {}
+    : config_(config), store_(store), catalog_(catalog), server_(80) {}
 
 void ConfigPortal::begin(bool forceAp) {
     const bool catalogReady = catalog_.begin();
     batteryMonitor_.begin();
     Serial.print("Widget catalog storage: ");
     Serial.println(catalogReady ? "ready" : "failed");
-    if (forceAp && !apMode_) {
+    const bool useAp = forceAp || WiFi.status() != WL_CONNECTED;
+    if (useAp && !apMode_) {
         startAp();
+    } else if (!useAp) {
+        apMode_ = false;
     }
     if (!routesRegistered_) {
         registerRoutes();
         routesRegistered_ = true;
     }
     if (!serverStarted_) {
+        csrfToken_ = generateCsrfToken();
+        accessToken_ = transitink::generatePortalApPassword(
+                           esp_random(), esp_random(), esp_random()).c_str();
         server_.begin();
         serverStarted_ = true;
     }
@@ -70,6 +76,9 @@ void ConfigPortal::stop() {
         WiFi.mode(WIFI_STA);
         apMode_ = false;
     }
+    apPassword_ = "";
+    csrfToken_ = "";
+    accessToken_ = "";
 }
 
 void ConfigPortal::loop() {
@@ -83,53 +92,94 @@ void ConfigPortal::loop() {
 }
 
 void ConfigPortal::startAp() {
-    WiFi.mode(WIFI_AP_STA);
+    WiFi.disconnect(false, false);
+    WiFi.mode(WIFI_AP);
     const String ssid = String(CONFIG_AP_PREFIX) + "-" + chipSuffix();
-    WiFi.softAP(ssid.c_str(), CONFIG_AP_PASSWORD);
+    apPassword_ = transitink::generatePortalApPassword(
+                      esp_random(), esp_random(), esp_random()).c_str();
+    WiFi.softAP(ssid.c_str(), apPassword_.c_str());
     dns_.start(kDnsPort, "*", WiFi.softAPIP());
     apMode_ = true;
 }
 
+IPAddress ConfigPortal::portalIp() const {
+    return apMode_ ? WiFi.softAPIP() : WiFi.localIP();
+}
+
+String ConfigPortal::pageUrl() const {
+    const String base = "http://" + portalIp().toString() + "/";
+    return apMode_ ? base : base + accessToken_;
+}
+
 void ConfigPortal::registerRoutes() {
-    server_.collectHeaders(kRequestHeaders, 2);
+    server_.collectHeaders(kRequestHeaders, 4);
     server_.on("/", HTTP_GET, [this]() { sendIndex(); });
     server_.on("/generate_204", HTTP_GET, [this]() { sendIndex(); });
-    server_.on("/api/config", HTTP_GET, [this]() { sendConfig(); });
-    server_.on("/api/save", HTTP_POST, [this]() { saveConfig(); });
-    server_.on("/api/wifi", HTTP_GET, [this]() { scanWifiNetworks(); });
-    server_.on("/api/catalog/bus/routes", HTTP_GET, [this]() { listBusRoutes(); });
-    server_.on("/api/catalog/bus/directions", HTTP_GET, [this]() { listBusDirections(); });
-    server_.on("/api/catalog/bus/stops", HTTP_GET, [this]() { listBusStops(); });
-    server_.on("/api/catalog/gmb/routes", HTTP_GET, [this]() { listGmbRoutes(); });
+    server_.on("/api/config", HTTP_GET,
+               [this]() { if (authorizePortalRequest(false)) sendConfig(); });
+    server_.on("/api/save", HTTP_POST,
+               [this]() { if (authorizePortalRequest(true)) saveConfig(); });
+    server_.on("/api/wifi", HTTP_GET,
+               [this]() { if (authorizePortalRequest(false)) scanWifiNetworks(); });
+    server_.on("/api/catalog/bus/routes", HTTP_GET,
+               [this]() { if (authorizePortalRequest(false)) listBusRoutes(); });
+    server_.on("/api/catalog/bus/directions", HTTP_GET,
+               [this]() { if (authorizePortalRequest(false)) listBusDirections(); });
+    server_.on("/api/catalog/bus/stops", HTTP_GET,
+               [this]() { if (authorizePortalRequest(false)) listBusStops(); });
+    server_.on("/api/catalog/gmb/routes", HTTP_GET,
+               [this]() { if (authorizePortalRequest(false)) listGmbRoutes(); });
     server_.on("/api/catalog/gmb/directions", HTTP_GET,
-               [this]() { listGmbDirections(); });
-    server_.on("/api/catalog/gmb/stops", HTTP_GET, [this]() { listGmbStops(); });
-    server_.on("/api/catalog/rail/lines", HTTP_GET, [this]() { listRailLines(); });
-    server_.on("/api/catalog/rail/stations", HTTP_GET, [this]() { listRailStations(); });
-    server_.on("/api/catalog/rail/directions", HTTP_GET, [this]() { listRailDirections(); });
+               [this]() { if (authorizePortalRequest(false)) listGmbDirections(); });
+    server_.on("/api/catalog/gmb/stops", HTTP_GET,
+               [this]() { if (authorizePortalRequest(false)) listGmbStops(); });
+    server_.on("/api/catalog/rail/lines", HTTP_GET,
+               [this]() { if (authorizePortalRequest(false)) listRailLines(); });
+    server_.on("/api/catalog/rail/stations", HTTP_GET,
+               [this]() { if (authorizePortalRequest(false)) listRailStations(); });
+    server_.on("/api/catalog/rail/directions", HTTP_GET,
+               [this]() { if (authorizePortalRequest(false)) listRailDirections(); });
     server_.on("/api/catalog/journey/locations", HTTP_GET,
-               [this]() { listJourneyLocations(); });
+               [this]() { if (authorizePortalRequest(false)) listJourneyLocations(); });
     server_.on("/api/catalog/journey/destinations", HTTP_GET,
-               [this]() { listJourneyDestinations(); });
+               [this]() { if (authorizePortalRequest(false)) listJourneyDestinations(); });
     server_.on("/assets/catalog/current/index.json", HTTP_GET,
-               [this]() { serveEmbeddedCatalog("index.json"); });
+               [this]() { if (authorizePortalRequest(false)) serveEmbeddedCatalog("index.json"); });
     server_.on("/assets/catalog/current/stops-kmb.json", HTTP_GET,
-               [this]() { serveEmbeddedCatalog("stops-kmb.json"); });
+               [this]() { if (authorizePortalRequest(false)) serveEmbeddedCatalog("stops-kmb.json"); });
     server_.on("/assets/catalog/current/stops-ctb.json", HTTP_GET,
-               [this]() { serveEmbeddedCatalog("stops-ctb.json"); });
+               [this]() { if (authorizePortalRequest(false)) serveEmbeddedCatalog("stops-ctb.json"); });
     server_.on("/assets/catalog/current/stops-gmb.json", HTTP_GET,
-               [this]() { serveEmbeddedCatalog("stops-gmb.json"); });
+               [this]() { if (authorizePortalRequest(false)) serveEmbeddedCatalog("stops-gmb.json"); });
     server_.on("/assets/catalog/current/rail.json", HTTP_GET,
-               [this]() { serveEmbeddedCatalog("rail.json"); });
+               [this]() { if (authorizePortalRequest(false)) serveEmbeddedCatalog("rail.json"); });
     server_.on("/api/catalog/route-index", HTTP_GET,
-               [this]() { readUpdatedRouteIndex(); });
+               [this]() { if (authorizePortalRequest(false)) readUpdatedRouteIndex(); });
     server_.on("/api/catalog/update", HTTP_POST,
-               [this]() { refreshRouteIndex(); });
+               [this]() { if (authorizePortalRequest(true)) refreshRouteIndex(); });
     server_.on("/api/catalog/route-override", HTTP_GET,
-               [this]() { readRouteOverride(); });
+               [this]() { if (authorizePortalRequest(false)) readRouteOverride(); });
     server_.on("/api/catalog/route-refresh", HTTP_POST,
-               [this]() { refreshRoute(); });
+               [this]() { if (authorizePortalRequest(true)) refreshRoute(); });
     server_.onNotFound([this]() { sendIndex(); });
+}
+
+bool ConfigPortal::authorizePortalRequest(bool validateOrigin) {
+    const IPAddress expectedIp = portalIp();
+    const String allowedHost = expectedIp.toString();
+    const bool accessAllowed = apMode_ || transitink::isPortalAccessTokenAuthorized(
+                                                server_.header("X-TransitInk-Access").c_str(),
+                                                accessToken_.c_str());
+    if (serverStarted_ && server_.client().localIP() == expectedIp && accessAllowed &&
+        transitink::isPortalRequestSourceAllowed(
+                       server_.hostHeader().c_str(),
+                       server_.header("Origin").c_str(),
+                       allowedHost.c_str(), validateOrigin)) {
+        return true;
+    }
+    server_.sendHeader("Cache-Control", "no-store");
+    sendText(403, "text/plain; charset=utf-8", "設定要求來源不正確");
+    return false;
 }
 
 void ConfigPortal::sendText(int code,
@@ -139,8 +189,46 @@ void ConfigPortal::sendText(int code,
 }
 
 void ConfigPortal::sendIndex() {
+    const IPAddress expectedIp = portalIp();
+    const String allowedHost = expectedIp.toString();
+    if (!serverStarted_ || server_.client().localIP() != expectedIp) {
+        server_.sendHeader("Cache-Control", "no-store");
+        sendText(403, "text/plain; charset=utf-8", "設定頁只可經裝置 Wi-Fi 開啟");
+        return;
+    }
+    if (!transitink::isPortalRequestSourceAllowed(
+            server_.hostHeader().c_str(), "", allowedHost.c_str(), false)) {
+        if (apMode_) {
+            server_.sendHeader("Location", pageUrl());
+            server_.sendHeader("Cache-Control", "no-store");
+            sendText(302, "text/plain; charset=utf-8", "正在前往設定頁");
+        } else {
+            server_.sendHeader("Cache-Control", "no-store");
+            sendText(403, "text/plain; charset=utf-8", "設定頁網址不正確");
+        }
+        return;
+    }
+    if (!apMode_) {
+        String submittedToken = server_.uri();
+        if (submittedToken.startsWith("/")) submittedToken.remove(0, 1);
+        if (!transitink::isPortalAccessTokenAuthorized(
+                submittedToken.c_str(), accessToken_.c_str())) {
+            server_.sendHeader("Cache-Control", "no-store");
+            sendText(403, "text/plain; charset=utf-8", "請使用裝置畫面的 QR code 開啟設定頁");
+            return;
+        }
+    }
     server_.sendHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     server_.sendHeader("Pragma", "no-cache");
+    server_.sendHeader(
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'unsafe-inline'; "
+        "style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; "
+        "object-src 'none'; base-uri 'none'; form-action 'self'; "
+        "frame-ancestors 'none'");
+    server_.sendHeader("X-Content-Type-Options", "nosniff");
+    server_.sendHeader("X-Frame-Options", "DENY");
+    server_.sendHeader("Referrer-Policy", "no-referrer");
     server_.send_P(200, "text/html; charset=utf-8", kTransitInkPortalHtml);
 }
 
@@ -199,6 +287,8 @@ void ConfigPortal::saveConfig() {
 void ConfigPortal::scanWifiNetworks() {
     const int count = WiFi.scanNetworks(false, true);
     if (count < 0) {
+        WiFi.scanDelete();
+        if (apMode_) WiFi.enableSTA(false);
         sendText(500, "text/plain; charset=utf-8", "Wi-Fi 掃描失敗");
         return;
     }
@@ -226,6 +316,7 @@ void ConfigPortal::scanWifiNetworks() {
         item["secure"] = WiFi.encryptionType(index) != WIFI_AUTH_OPEN;
     }
     WiFi.scanDelete();
+    if (apMode_) WiFi.enableSTA(false);
     String json;
     serializeJson(doc, json);
     sendText(200, "application/json; charset=utf-8", json);

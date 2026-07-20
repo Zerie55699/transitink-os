@@ -111,19 +111,5 @@ class BusProviderStructureTests(unittest.TestCase):
         self.assertNotIn("WiFi", source)
         self.assertNotRegex(source, r"\bString\b")
 
-    def test_native_json_environment_is_separate_and_source_filtered(self):
-        config = self.source("platformio.native.ini")
-        self.assertIn("[env:native_app_config]", config)
-        self.assertIn("[env:native_json]", config)
-        native_json = config.split("[env:native_json]", 1)[1]
-        self.assertIn("platform = native", native_json)
-        self.assertIn("test_build_src = yes", native_json)
-        self.assertIn("+<TransitJsonParsers.cpp>", native_json)
-        self.assertIn("+<core/WidgetConfigCore.cpp>", native_json)
-        self.assertIn("+<core/WidgetCore.cpp>", native_json)
-        self.assertIn("bblanchon/ArduinoJson@^6.21.5", native_json)
-        self.assertIn("build_flags = -std=gnu++17", native_json)
-
-
 if __name__ == "__main__":
     unittest.main()

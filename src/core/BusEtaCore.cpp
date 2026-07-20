@@ -130,6 +130,22 @@ bool SingleButtonClickDetector::update(bool pressed, bool inhibited, unsigned lo
     return clicked;
 }
 
+DebouncedButtonPressDetector::DebouncedButtonPressDetector(unsigned long debounceMs)
+    : debounceMs_(debounceMs) {}
+
+bool DebouncedButtonPressDetector::update(bool pressed, unsigned long nowMs) {
+    if (pressed != rawPressed_) {
+        rawPressed_ = pressed;
+        rawChangedAtMs_ = nowMs;
+        return false;
+    }
+    if (stablePressed_ == rawPressed_ || nowMs - rawChangedAtMs_ < debounceMs_) {
+        return false;
+    }
+    stablePressed_ = rawPressed_;
+    return stablePressed_;
+}
+
 bool shouldAutoSleep(const SleepSettings& settings, unsigned long wakeStartedAtMs, unsigned long nowMs, bool configAccessMode) {
     if (!settings.enabled || configAccessMode || settings.wakeDurationMinutes == 0 || wakeStartedAtMs == 0) {
         return false;
@@ -143,6 +159,24 @@ unsigned long long sleepMaintenanceIntervalUs(const SleepSettings& settings) {
         return 0;
     }
     return static_cast<unsigned long long>(settings.maintenanceHours) * 60ULL * 60ULL * 1000000ULL;
+}
+
+SleepResumeAction decideSleepResumeAction(bool sleepMarkerPending,
+                                          bool timerWake,
+                                          bool homeGpioWake,
+                                          bool homePressedAtBoot,
+                                          bool powerOnReset) {
+    if (timerWake) {
+        return SleepResumeAction::RunMaintenance;
+    }
+    if (homeGpioWake ||
+        (sleepMarkerPending && (homePressedAtBoot || powerOnReset))) {
+        return SleepResumeAction::ShowDashboard;
+    }
+    if (sleepMarkerPending) {
+        return SleepResumeAction::ResumeSleep;
+    }
+    return SleepResumeAction::NormalBoot;
 }
 
 long parseHongKongIso(const std::string& iso) {

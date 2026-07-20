@@ -60,10 +60,29 @@ private:
     bool cancelled_ = false;
 };
 
+class DebouncedButtonPressDetector {
+public:
+    explicit DebouncedButtonPressDetector(unsigned long debounceMs);
+    bool update(bool pressed, unsigned long nowMs);
+
+private:
+    unsigned long debounceMs_;
+    unsigned long rawChangedAtMs_ = 0;
+    bool rawPressed_ = false;
+    bool stablePressed_ = false;
+};
+
 struct SleepSettings {
     bool enabled = true;
     unsigned int wakeDurationMinutes = 5;
     unsigned int maintenanceHours = 12;
+};
+
+enum class SleepResumeAction {
+    NormalBoot,
+    ShowDashboard,
+    RunMaintenance,
+    ResumeSleep,
 };
 
 std::string kmbRoutesUrl();
@@ -82,5 +101,10 @@ std::vector<DisplayEta> selectEtas(
     std::size_t limit);
 bool shouldAutoSleep(const SleepSettings& settings, unsigned long wakeStartedAtMs, unsigned long nowMs, bool configAccessMode);
 unsigned long long sleepMaintenanceIntervalUs(const SleepSettings& settings);
+SleepResumeAction decideSleepResumeAction(bool sleepMarkerPending,
+                                          bool timerWake,
+                                          bool homeGpioWake,
+                                          bool homePressedAtBoot,
+                                          bool powerOnReset);
 
 }  // namespace bus_eta

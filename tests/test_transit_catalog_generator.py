@@ -116,14 +116,21 @@ class TransitCatalogGeneratorTests(unittest.TestCase):
             self.generator.validate_count_change(previous, current, False)
         self.generator.validate_count_change(previous, current, True)
 
-    def test_generator_check_mode_uses_cached_sources_without_network(self):
-        completed = subprocess.run(
-            [str(ROOT / ".venv/bin/python"), str(SCRIPT), "--check"],
-            cwd=ROOT,
-            text=True,
-            capture_output=True,
-            timeout=30,
-        )
+    def test_generator_check_mode_needs_no_cache_or_network(self):
+        with tempfile.TemporaryDirectory() as directory:
+            completed = subprocess.run(
+                [
+                    str(ROOT / ".venv/bin/python"),
+                    str(SCRIPT),
+                    "--check",
+                    "--cache-dir",
+                    str(Path(directory) / "missing-cache"),
+                ],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                timeout=30,
+            )
         self.assertEqual(0, completed.returncode, completed.stderr)
 
     def test_source_timeout_retries_then_fails_closed(self):

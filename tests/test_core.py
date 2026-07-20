@@ -57,6 +57,22 @@ class CoreBehaviorTests(unittest.TestCase):
         ]
         subprocess.run(cmd, cwd=ROOT, env=env, check=True)
 
+    def test_json_native_behaviors(self):
+        env = os.environ.copy()
+        env["PLATFORMIO_CORE_DIR"] = str(ROOT / ".platformio")
+        for test_filter in ("test_transit_json_parsers", "test_widget_catalog"):
+            cmd = [
+                str(ROOT / ".venv/bin/platformio"),
+                "test",
+                "-c",
+                str(NATIVE_CONFIG),
+                "-e",
+                "native_json",
+                "-f",
+                test_filter,
+            ]
+            subprocess.run(cmd, cwd=ROOT, env=env, check=True)
+
     def test_core_cpp_behaviors(self):
         BUILD_DIR.mkdir(exist_ok=True)
         cmd = [

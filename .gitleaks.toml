@@ -2,7 +2,7 @@
 useDefault = true
 
 [[allowlists]]
-description = "Ignored local tools, builds, backups and legacy workspaces"
+description = "Ignored local tools, builds, backups and agent workspaces"
 paths = [
   '''^\.catalog-cache/''',
   '''^\.pio/''',
@@ -12,5 +12,4 @@ paths = [
   '''^\.venv/''',
   '''^backups/''',
   '''^dist/''',
-  '''^zectrix-note4-installer/''',
 ]

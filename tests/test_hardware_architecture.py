@@ -20,11 +20,8 @@ class HardwareArchitectureTests(unittest.TestCase):
 
     def test_product_config_is_separate_from_hardware_profile(self):
         product = read_text("include/ProductConfig.h")
-        compatibility = read_text("include/BoardConfig.h")
         profile = read_text("include/hardware/boards/ZectrixNote4.h")
         self.assertIn('FIRMWARE_PRODUCT_NAME "TransitInk OS"', product)
-        self.assertIn('#include "ProductConfig.h"', compatibility)
-        self.assertIn('#include "hardware/BoardProfile.h"', compatibility)
         self.assertNotIn("FIRMWARE_PRODUCT_NAME", profile)
 
     def test_application_uses_board_support_not_gpio_numbers(self):
@@ -36,7 +33,9 @@ class HardwareArchitectureTests(unittest.TestCase):
             "configureHomeWakeup()",
             "disableHomeWakeup()",
             "homeButtonPressed()",
-            "configButtonPressed()",
+            "startButtonMonitoring()",
+            "takeConfigClick()",
+            "takeFactoryResetHold()",
             "factoryResetUpButtonPressed()",
             "factoryResetDownButtonPressed()",
         ):

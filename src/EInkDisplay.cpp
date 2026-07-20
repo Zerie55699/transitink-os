@@ -396,9 +396,11 @@ void drawWidgetLane(uint8_t slot, const transitink::WidgetSnapshot& snapshot, bo
     }
     if (snapshot.freshness == transitink::Freshness::Fresh &&
         (snapshot.state == transitink::WidgetState::Empty || snapshot.state == transitink::WidgetState::Error)) {
-        const String message = snapshot.providerMessage.empty()
-                                   ? String("暫未能取得資料")
-                                   : String(snapshot.providerMessage.c_str());
+        const String message = snapshot.providerMessage.empty() && snapshot.fetchedAtEpoch == 0
+                                   ? String("...")
+                                   : (snapshot.providerMessage.empty()
+                                          ? String("暫未能取得資料")
+                                          : String(snapshot.providerMessage.c_str()));
         drawTruncatedText(224, valueY, message, 164);
         drawLaneDivider(region, drawDivider);
         return;
@@ -611,6 +613,24 @@ void EInkDisplay::showSleep(const transitink::WidgetSnapshotSet& snapshots, cons
     drawWeatherFooter(weather);
     markNonDashboardFrame();
     fullRefresh();
+}
+
+void EInkDisplay::refreshSleepStatusAndWeather(
+    const transitink::WidgetSnapshotSet& snapshots,
+    const WeatherSnapshot& weather) {
+    if (!previousFrameValid) {
+        showSleep(snapshots, weather);
+        return;
+    }
+
+    std::memcpy(frameBuffer, previousFrameBuffer, sizeof(frameBuffer));
+    clearRegion(kStatusRegion);
+    drawClockAndStatusBar();
+    clearRegion(kFooterRegion);
+    drawWeatherFooter(weather);
+    partialRefresh(kStatusRegion.x, kStatusRegion.y, kStatusRegion.w, kStatusRegion.h);
+    partialRefresh(kFooterRegion.x, kFooterRegion.y, kFooterRegion.w, kFooterRegion.h);
+    markNonDashboardFrame();
 }
 
 void EInkDisplay::prepareForSleep() {
