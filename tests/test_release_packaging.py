@@ -166,6 +166,7 @@ class ReleasePackagingTests(unittest.TestCase):
         self.assertIn("dist/installer/legal/THIRD_PARTY_DATA.md", workflow)
         self.assertIn("dist/installer/legal/CORRESPONDING_SOURCE.md", workflow)
         self.assertIn("actions/attest-build-provenance@", workflow)
+        self.assertIn("GH_REPO: ${{ github.repository }}", workflow)
         self.assertIn("actions/upload-pages-artifact@56afc609", workflow)
         self.assertIn("actions/deploy-pages@d6db9016", workflow)
         self.assertNotIn("uses: actions/checkout@v", workflow)
