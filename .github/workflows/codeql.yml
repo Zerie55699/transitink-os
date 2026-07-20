@@ -39,4 +39,4 @@ jobs:
         run: PLATFORMIO_CORE_DIR="$PWD/.platformio" .venv/bin/platformio run -e zectrix_note4
 
       - name: Analyze
-        uses: github/codeql-action/analyze@ddf5ce7296213f5548c91e2dd19df2d77d2b2d66 # v3
+        uses: github/codeql-action/analyze@b7351df727350dca84cb9d725d57dcf5bc82ba26 # v3
