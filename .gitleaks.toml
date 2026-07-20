@@ -1,0 +1,15 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Ignored local tools, builds, backups and agent workspaces"
+paths = [
+  '''^\.catalog-cache/''',
+  '''^\.pio/''',
+  '''^\.platformio/''',
+  '''^\.superpowers/''',
+  '''^\.test-build/''',
+  '''^\.venv/''',
+  '''^backups/''',
+  '''^dist/''',
+]

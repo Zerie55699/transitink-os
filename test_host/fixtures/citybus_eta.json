@@ -1,0 +1,119 @@
+{
+  "type": "ETA",
+  "version": "2.0",
+  "generated_timestamp": "2033-05-18T11:33:20+08:00",
+  "fixture_provenance": "Adapted from Citybus Data Dictionary v2.01 ETA sample; timestamps and edge cases are deterministic test extensions.",
+  "data": [
+    {
+      "co": "CTB",
+      "route": "11",
+      "dir": "O",
+      "seq": 1,
+      "stop": "001145",
+      "dest_tc": "渣甸山",
+      "dest_sc": "渣甸山",
+      "dest_en": "Jardine's Lookout",
+      "eta_seq": 1,
+      "eta": "2033-05-18T11:38:20+08:00",
+      "rmk_tc": "",
+      "rmk_sc": "",
+      "rmk_en": "",
+      "data_timestamp": "2033-05-18T11:33:00+08:00"
+    },
+    {
+      "co": "CTB",
+      "route": "11",
+      "dir": "O",
+      "seq": 1,
+      "stop": "001145",
+      "dest_tc": "渣甸山",
+      "eta_seq": 2,
+      "eta": "2033-05-18T11:38:20+08:00",
+      "rmk_tc": "",
+      "data_timestamp": "2033-05-18T11:33:00+08:00"
+    },
+    {
+      "co": "CTB",
+      "route": "11",
+      "dir": "O",
+      "seq": 1,
+      "stop": "001145",
+      "dest_tc": "渣甸山",
+      "eta_seq": 3,
+      "eta": "2033-05-18T11:43:20+08:00",
+      "rmk_tc": "原定班次",
+      "data_timestamp": "2033-05-18T11:33:00+08:00"
+    },
+    {
+      "co": "CTB",
+      "route": "11",
+      "dir": "O",
+      "seq": 1,
+      "stop": "001145",
+      "dest_tc": "渣甸山",
+      "eta_seq": 4,
+      "eta": "",
+      "rmk_tc": "九巴時段",
+      "data_timestamp": "2033-05-18T11:33:00+08:00"
+    },
+    {
+      "co": "CTB",
+      "route": "11",
+      "dir": "O",
+      "seq": 1,
+      "stop": "001145",
+      "dest_tc": "渣甸山",
+      "eta_seq": 5,
+      "rmk_tc": "只供參考",
+      "data_timestamp": "2033-05-18T11:33:00+08:00"
+    },
+    {
+      "co": "CTB",
+      "route": "11",
+      "dir": "O",
+      "seq": 1,
+      "stop": "001145",
+      "dest_tc": "渣甸山",
+      "eta_seq": 6,
+      "eta": "",
+      "rmk_tc": "原定班次取消",
+      "data_timestamp": "2033-05-18T11:33:00+08:00"
+    },
+    {
+      "co": "CTB",
+      "route": "12",
+      "dir": "O",
+      "seq": 1,
+      "stop": "001145",
+      "dest_tc": "中環",
+      "eta_seq": 1,
+      "eta": "2033-05-18T11:35:20+08:00",
+      "rmk_tc": "",
+      "data_timestamp": "2033-05-18T11:33:00+08:00"
+    },
+    {
+      "co": "CTB",
+      "route": "11",
+      "dir": "I",
+      "seq": 1,
+      "stop": "001145",
+      "dest_tc": "中環",
+      "eta_seq": 1,
+      "eta": "2033-05-18T11:36:20+08:00",
+      "rmk_tc": "",
+      "data_timestamp": "2033-05-18T11:33:00+08:00"
+    },
+    {
+      "co": "KMB",
+      "route": "11",
+      "dir": "O",
+      "seq": 1,
+      "stop": "001145",
+      "dest_tc": "九龍",
+      "eta_seq": 1,
+      "eta": "2033-05-18T11:37:20+08:00",
+      "rmk_tc": "聯營班次",
+      "data_timestamp": "2033-05-18T11:33:00+08:00"
+    }
+  ]
+}

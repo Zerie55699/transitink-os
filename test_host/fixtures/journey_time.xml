@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<jtis_journey_list xmlns="http://data.one.gov.hk/td">
+  <jtis_journey_time>
+    <LOCATION_ID>H1</LOCATION_ID>
+    <DESTINATION_ID>CH</DESTINATION_ID>
+    <CAPTURE_DATE>2024-02-29T23:59:59</CAPTURE_DATE>
+    <JOURNEY_TYPE>1</JOURNEY_TYPE>
+    <JOURNEY_DATA>6</JOURNEY_DATA>
+    <COLOUR_ID>3</COLOUR_ID>
+    <JOURNEY_DESC/>
+  </jtis_journey_time>
+  <jtis_journey_time>
+    <LOCATION_ID>K07</LOCATION_ID>
+    <DESTINATION_ID>ATSCA</DESTINATION_ID>
+    <CAPTURE_DATE>2024-02-29T23:59:59</CAPTURE_DATE>
+    <JOURNEY_TYPE>1</JOURNEY_TYPE>
+    <JOURNEY_DATA>7</JOURNEY_DATA>
+    <COLOUR_ID>2</COLOUR_ID>
+    <JOURNEY_DESC>  正常  </JOURNEY_DESC>
+  </jtis_journey_time>
+  <jtis_journey_time>
+    <LOCATION_ID>SJ2</LOCATION_ID>
+    <DESTINATION_ID>TCT</DESTINATION_ID>
+    <CAPTURE_DATE>2024-02-29T23:59:59</CAPTURE_DATE>
+    <JOURNEY_TYPE>2</JOURNEY_TYPE>
+    <JOURNEY_DATA>-1</JOURNEY_DATA>
+    <COLOUR_ID>-1</COLOUR_ID>
+    <JOURNEY_DESC/>
+  </jtis_journey_time>
+</jtis_journey_list>

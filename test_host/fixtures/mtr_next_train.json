@@ -1,0 +1,25 @@
+{
+  "sys_time": "2033-05-18 11:33:20",
+  "curr_time": "2033-05-18 11:33:20",
+  "data": {
+    "TWL-TSW": {
+      "curr_time": "2033-05-18 11:33:20",
+      "sys_time": "2033-05-18 11:33:20",
+      "UP": [
+        {"ttnt":"5","valid":"Y","plat":"1","time":"2033-05-18 11:38:20","source":"-","dest":"TSW","seq":"1"},
+        {"ttnt":"5","valid":"Y","plat":"1","time":"2033-05-18 11:38:20","source":"-","dest":"TSW","seq":"2"},
+        {"ttnt":"10","valid":"Y","plat":2,"time":"2033-05-18 11:43:20","source":"-","dest":"TSW","seq":"3"},
+        {"ttnt":"2","valid":"N","plat":"1","time":"2033-05-18 11:35:20","source":"-","dest":"TSW","seq":"4"},
+        {"ttnt":"0","valid":"Y","plat":"1","time":"2033-02-29 11:34:20","source":"-","dest":"TSW","seq":"5"},
+        {"ttnt":"3","valid":"Y","plat":"1","time":"2033-05-18 11:36:20","source":"-","dest":"XXX","seq":"6"},
+        {"ttnt":"4","valid":"Y","plat":"1","time":2000000240,"source":"-","dest":"TSW","seq":"7"}
+      ],
+      "DOWN": [
+        {"ttnt":"3","valid":"Y","plat":"2","time":"2033-05-18 11:36:20","source":"-","dest":"CEN","seq":"1"}
+      ]
+    }
+  },
+  "status": 1,
+  "message": "successful",
+  "isdelay": "Y"
+}

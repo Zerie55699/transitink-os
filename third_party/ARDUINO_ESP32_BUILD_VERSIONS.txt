@@ -1,0 +1,38 @@
+lib-builder: master 43a8f6d
+esp-idf: v5.5.4 735507283d
+arduino: master 6cb835025
+tinyusb: master 5004a24b2
+chmorgan__esp-libhelix-mp3: 1.0.3
+espressif__cbor: 0.6.1~4
+espressif__cjson: 1.7.19~2
+espressif__dl_fft: 0.4.0
+espressif__esp-dsp: 1.8.0
+espressif__esp-modbus: 2.1.2
+espressif__esp-nn: 1.2.3
+espressif__esp-serial-flasher: 0.0.11
+espressif__esp-sr: 2.4.6
+espressif__esp-tflite-micro: 1.3.5
+espressif__esp-zboss-lib: 1.6.4
+espressif__esp-zigbee-lib: 1.6.8
+espressif__esp32-camera:
+espressif__esp_delta_ota: 1.1.4
+espressif__esp_diag_data_store: 1.0.2
+espressif__esp_diagnostics: 1.2.1
+espressif__esp_encrypted_img: 2.1.0
+espressif__esp_insights: 1.2.2
+espressif__esp_jpeg: 1.3.1
+espressif__esp_matter: 1.4.1
+espressif__esp_modem: 2.0.1
+espressif__esp_rainmaker: 1.5.2
+espressif__esp_rcp_update: 1.2.0
+espressif__esp_schedule: 1.2.0
+espressif__esp_secure_cert_mgr: 2.9.2
+espressif__jsmn: 1.1.0
+espressif__json_generator: 1.1.2
+espressif__json_parser: 1.0.3
+espressif__libsodium: 1.0.22
+espressif__mdns: 1.11.1
+espressif__network_provisioning: 1.0.2
+espressif__qrcode: 0.1.0~2
+espressif__rmaker_common: 1.4.6
+joltwallet__littlefs: 1.22.1

@@ -1,0 +1,26 @@
+# Operating-system and editor files
+.DS_Store
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# PlatformIO and native-test output
+.pio/
+.platformio/
+.test-build/
+compile_commands.json
+.catalog-cache/
+
+# Device-local and release artifacts
+backups/
+dist/
+*.bin
+*.elf
+*.map
+
+# Local design/agent workspaces
+.superpowers/
