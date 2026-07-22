@@ -8,8 +8,8 @@ configured widgets and includes an on-device Traditional Chinese settings portal
 
 ![Zectrix Note 4 running TransitInk OS](installer/assets/zectrix-note4-product.png)
 
-TransitInk OS is an independent open-source project and is not affiliated with
-or endorsed by Zectrix. TransitInk OS 是獨立開源專案，與 Zectrix 沒有從屬或認可關係。
+TransitInk OS is an independent source-available project and is not affiliated
+with or endorsed by Zectrix. TransitInk OS 是獨立原始碼公開專案，與 Zectrix 沒有從屬或認可關係。
 Zectrix and its product names remain the property of their respective owner.
 
 Supported widgets:
@@ -19,9 +19,11 @@ Supported widgets:
 - MTR ETA for heavy rail and Light Rail
 - Transport Department journey-time indicators
 
-TransitInk OS source code is licensed under the
-[Apache License 2.0](LICENSE). Redistributable fonts, generated glyphs, vendored
-components, and transport data retain the separate terms recorded in
+Original TransitInk OS source code is licensed for noncommercial purposes under
+the [PolyForm Noncommercial License 1.0.0](LICENSE). Commercial use requires a
+separate written licence from the applicable copyright holder. Redistributable
+fonts, generated glyphs, vendored components, and transport data retain the
+separate terms recorded in
 [Third-party notices](THIRD_PARTY_NOTICES.md) and
 [Third-party data](THIRD_PARTY_DATA.md). Binary-release recipients can also use
 [Corresponding source and rebuild information](CORRESPONDING_SOURCE.md) to

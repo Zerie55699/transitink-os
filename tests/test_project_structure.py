@@ -317,10 +317,22 @@ class ProjectStructureTests(unittest.TestCase):
     def test_all_disabled_widgets_are_a_valid_dashboard_configuration(self):
         main = read_text("src/main.cpp")
         config = read_text("src/AppConfig.cpp")
+        display = read_text("src/EInkDisplay.cpp")
         self.assertIn("return areWidgetsValid(config);", config)
         self.assertNotIn("hasEnabledWidgets()", main)
         self.assertNotIn("尚未選擇路線", main)
         self.assertNotIn("no routes configured", main)
+        self.assertIn("bool hasEnabledWidget(", display)
+        no_widgets = cpp_function_body(display, "void drawNoWidgetsHint()")
+        self.assertIn('"尚未設定小工具"', no_widgets)
+        self.assertIn('"按 Volume Up 開啟設定頁"', no_widgets)
+        for signature in (
+            "void EInkDisplay::showDashboard(",
+            "void EInkDisplay::showSleep(",
+        ):
+            body = cpp_function_body(display, signature)
+            self.assertIn("if (hasEnabledWidget(snapshots))", body)
+            self.assertIn("drawNoWidgetsHint();", body)
 
     def test_eink_setup_screen_has_polished_copy_and_status_icons(self):
         header = read_text("include/EInkDisplay.h")

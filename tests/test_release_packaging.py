@@ -154,6 +154,34 @@ class ReleasePackagingTests(unittest.TestCase):
         self.assertIn("1050ddeb3e6be7f435df4df760a7d13e5", image_source)
         self.assertIn("AI-assisted product visual", image_source)
 
+    def test_project_license_is_noncommercial_and_source_available(self):
+        licence = (ROOT / "LICENSE").read_text(encoding="utf-8")
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        contributing = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
+        corresponding_source = (ROOT / "CORRESPONDING_SOURCE.md").read_text(
+            encoding="utf-8"
+        )
+        notices = (ROOT / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
+        installer = (ROOT / "installer" / "index.html").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("PolyForm Noncommercial License 1.0.0", licence)
+        self.assertIn(
+            "Required Notice: Copyright 2026 TransitInk OS contributors.",
+            licence,
+        )
+        self.assertIn("Commercial use requires a", readme)
+        for document in (readme, contributing, corresponding_source, notices):
+            self.assertRegex(
+                document, r"PolyForm\s+Noncommercial License 1\.0\.0"
+            )
+        for document in (readme, notices, installer):
+            self.assertNotIn("open-source project", document)
+            self.assertNotIn("獨立開源專案", document)
+        self.assertIn("source-available project", readme)
+        self.assertIn("PolyForm Noncommercial 1.0.0", installer)
+
     def test_device_catalog_is_versioned_and_extensible(self):
         catalog = json.loads(
             (ROOT / "installer" / "devices.json").read_text(encoding="utf-8")

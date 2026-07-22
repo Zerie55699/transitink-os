@@ -8,11 +8,7 @@ All notable user-visible changes to TransitInk OS will be documented here.
   bootloader flash mode and boots after installation.
 - Added a release-time check that rejects installer firmware which differs from
   PlatformIO's canonical factory image.
-
-## 1.0.0 - 2026-07-22
-
-- Four configurable e-paper dashboard widgets for bus, Green Minibus, MTR,
-  Light Rail and Transport Department journey-time data.
-- Offline embedded route and stop catalogs with explicit on-device refresh.
-- Traditional Chinese settings portal and OFL-licensed embedded glyph data.
-- Zectrix Note 4 hardware profile, sleep/wake handling and browser installer.
+- Changed future TransitInk OS releases to the PolyForm Noncommercial License
+  1.0.0; separately licensed third-party components retain their own terms.
+- Added an on-device prompt directing users to press Volume Up when no dashboard
+  widgets have been configured.

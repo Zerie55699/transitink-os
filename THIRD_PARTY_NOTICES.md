@@ -1,7 +1,9 @@
 # Third-party notices
 
-TransitInk OS source code is licensed under Apache-2.0. This repository also
-contains or links third-party components with separate licences and terms.
+Original TransitInk OS source code is licensed under the PolyForm
+Noncommercial License 1.0.0. This repository also contains or links third-party
+components with separate licences and terms; the project licence does not
+replace or restrict those third-party terms.
 
 ## Noto Sans CJK HK Regular
 
@@ -50,9 +52,10 @@ The released firmware is linked with the following pinned components:
 | QRCode by Richard Moore | 0.0.1 | MIT | `third_party/licenses/QRCode-MIT.txt` |
 
 The Arduino core is a separately licensed library. TransitInk OS does not
-relicense it under Apache-2.0. Exact framework source, precompiled-library
-provenance, build instructions, and the route for relinking a modified core are
-recorded in `CORRESPONDING_SOURCE.md` and are included with binary releases.
+relicense it under the project licence. Exact framework source,
+precompiled-library provenance, build instructions, and the route for relinking
+a modified core are recorded in `CORRESPONDING_SOURCE.md` and are included with
+binary releases.
 
 ## Hardware implementation references
 
@@ -79,8 +82,8 @@ name, trademarks, or product design beyond descriptive use.
 
 ## Trademarks and non-endorsement
 
-TransitInk OS is an independent open-source project and is not affiliated with
-or endorsed by Zectrix. TransitInk OS 是獨立開源專案，與 Zectrix 沒有從屬或認可關係。
+TransitInk OS is an independent source-available project and is not affiliated
+with or endorsed by Zectrix. TransitInk OS 是獨立原始碼公開專案，與 Zectrix 沒有從屬或認可關係。
 Zectrix and all other third-party names and marks are
 the property of their respective owners. Their use identifies compatible
 hardware or data sources and does not imply sponsorship or endorsement.

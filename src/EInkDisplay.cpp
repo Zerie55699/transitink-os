@@ -365,6 +365,20 @@ bool shouldDrawLaneDivider(const transitink::WidgetSnapshotSet& snapshots, uint8
     return false;
 }
 
+bool hasEnabledWidget(const transitink::WidgetSnapshotSet& snapshots) {
+    return std::any_of(
+        snapshots.begin(), snapshots.end(), [](const transitink::WidgetSnapshot& snapshot) {
+            return snapshot.type != transitink::WidgetType::Disabled;
+        });
+}
+
+void drawNoWidgetsHint() {
+    const String title = "尚未設定小工具";
+    const String action = "按 Volume Up 開啟設定頁";
+    drawText(std::max(12, (EINK_WIDTH - measureTextWidth(title)) / 2), 138, title);
+    drawText(std::max(12, (EINK_WIDTH - measureTextWidth(action)) / 2), 174, action);
+}
+
 void drawWidgetLane(uint8_t slot, const transitink::WidgetSnapshot& snapshot, bool sleeping, bool drawDivider) {
     const DisplayRegion& region = laneRegion(slot);
     if (snapshot.type == transitink::WidgetType::Disabled) {
@@ -547,9 +561,13 @@ void EInkDisplay::showWifiStatus(const String& message) {
 void EInkDisplay::showDashboard(const transitink::WidgetSnapshotSet& snapshots, const WeatherSnapshot& weather) {
     canvas.clear();
     drawClockAndStatusBar();
-    for (uint8_t slot = 0; slot < transitink::kWidgetSlotCount; ++slot) {
-        const bool drawDivider = shouldDrawLaneDivider(snapshots, slot);
-        drawWidgetLane(slot, snapshots[slot], false, drawDivider);
+    if (hasEnabledWidget(snapshots)) {
+        for (uint8_t slot = 0; slot < transitink::kWidgetSlotCount; ++slot) {
+            const bool drawDivider = shouldDrawLaneDivider(snapshots, slot);
+            drawWidgetLane(slot, snapshots[slot], false, drawDivider);
+        }
+    } else {
+        drawNoWidgetsHint();
     }
     drawWeatherFooter(weather);
     fullRefresh();
@@ -606,9 +624,13 @@ void EInkDisplay::refreshWeatherFooter(const transitink::WidgetSnapshotSet& snap
 void EInkDisplay::showSleep(const transitink::WidgetSnapshotSet& snapshots, const WeatherSnapshot& weather) {
     canvas.clear();
     drawClockAndStatusBar();
-    for (uint8_t slot = 0; slot < transitink::kWidgetSlotCount; ++slot) {
-        const bool drawDivider = shouldDrawLaneDivider(snapshots, slot);
-        drawWidgetLane(slot, snapshots[slot], true, drawDivider);
+    if (hasEnabledWidget(snapshots)) {
+        for (uint8_t slot = 0; slot < transitink::kWidgetSlotCount; ++slot) {
+            const bool drawDivider = shouldDrawLaneDivider(snapshots, slot);
+            drawWidgetLane(slot, snapshots[slot], true, drawDivider);
+        }
+    } else {
+        drawNoWidgetsHint();
     }
     drawWeatherFooter(weather);
     markNonDashboardFrame();

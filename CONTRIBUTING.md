@@ -31,7 +31,8 @@ the board revision and verification performed in the pull request.
   hardware change.
 
 Unless explicitly stated otherwise, contributions intentionally submitted for
-inclusion in TransitInk OS are accepted under the
-[Apache License 2.0](LICENSE), in accordance with section 5 of that licence.
+inclusion in TransitInk OS must be licensed under the
+[PolyForm Noncommercial License 1.0.0](LICENSE). By submitting a contribution,
+you confirm that you have the right to provide it under those terms.
 Follow the release procedure in [Development](docs/DEVELOPMENT.md) before
 publishing a release.

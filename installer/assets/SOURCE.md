@@ -13,4 +13,4 @@ rights. The screen contents are illustrative and do not represent an
 endorsement by a transport operator or hardware vendor.
 
 TransitInk OS claims no rights in the Zectrix name, trademarks, or product
-design beyond descriptive use. TransitInk OS 是獨立開源專案，與 Zectrix 沒有從屬或認可關係。
+design beyond descriptive use. TransitInk OS 是獨立原始碼公開專案，與 Zectrix 沒有從屬或認可關係。

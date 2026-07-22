@@ -48,8 +48,9 @@ PlatformIO downloads the pinned Arduino core, precompiled libraries, and the
 declared source libraries. To use a modified Arduino core, replace the
 `framework-arduinoespressif32` package in the project-local PlatformIO core with
 your build of the 3.3.9-compatible source, then run the same build command. The
-complete TransitInk application source is available under Apache-2.0, so no
-separate proprietary application object is required to produce a modified
+complete TransitInk application source is included and available for permitted
+noncommercial purposes under the PolyForm Noncommercial License 1.0.0, so no
+separate application object is required to produce a permitted modified
 combined firmware image.
 
 This information is provided to make the corresponding source and relinking
