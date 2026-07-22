@@ -59,6 +59,7 @@ def platformio_core_dir() -> Path:
 
 def merge_firmware(build_dir: Path, output_file: Path) -> None:
     core_dir = platformio_core_dir()
+    factory_image = require_file(build_dir / "firmware.factory.bin")
     boot_app0 = require_file(
         core_dir
         / "packages"
@@ -81,7 +82,7 @@ def merge_firmware(build_dir: Path, output_file: Path) -> None:
         "esp32s3",
         "merge-bin",
         "--flash-mode",
-        "qio",
+        "keep",
         "--flash-size",
         "16MB",
         "--output",
@@ -90,6 +91,10 @@ def merge_firmware(build_dir: Path, output_file: Path) -> None:
     for offset, source in inputs:
         command.extend((offset, str(source)))
     subprocess.run(command, cwd=ROOT, check=True)
+    if sha256(output_file) != sha256(factory_image):
+        raise ValueError(
+            "merged installer firmware differs from PlatformIO factory image"
+        )
 
 
 def sha256(path: Path) -> str:

@@ -18,7 +18,78 @@ SPEC.loader.exec_module(PACKAGE_INSTALLER)
 
 class ReleasePackagingTests(unittest.TestCase):
     def test_firmware_version_comes_from_product_config(self):
-        self.assertEqual("1.0.0", PACKAGE_INSTALLER.firmware_version())
+        self.assertEqual("1.0.1", PACKAGE_INSTALLER.firmware_version())
+
+    def test_merge_preserves_flash_mode_and_matches_factory_image(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            build = root / "build"
+            build.mkdir()
+            for filename in ("bootloader.bin", "partitions.bin", "firmware.bin"):
+                (build / filename).write_bytes(b"input")
+            (build / "firmware.factory.bin").write_bytes(b"factory")
+            core = root / "core"
+            boot_app0 = (
+                core
+                / "packages"
+                / "framework-arduinoespressif32"
+                / "tools"
+                / "partitions"
+                / "boot_app0.bin"
+            )
+            boot_app0.parent.mkdir(parents=True)
+            boot_app0.write_bytes(b"input")
+            output = root / "output.bin"
+            commands = []
+
+            def fake_run(command, cwd, check):
+                commands.append(command)
+                Path(command[command.index("--output") + 1]).write_bytes(b"factory")
+
+            with mock.patch.object(
+                PACKAGE_INSTALLER, "platformio_core_dir", return_value=core
+            ), mock.patch.object(
+                PACKAGE_INSTALLER.subprocess, "run", side_effect=fake_run
+            ):
+                PACKAGE_INSTALLER.merge_firmware(build, output)
+
+            command = commands[0]
+            self.assertEqual("keep", command[command.index("--flash-mode") + 1])
+            self.assertNotIn("qio", command)
+
+    def test_merge_rejects_output_that_differs_from_factory_image(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            build = root / "build"
+            build.mkdir()
+            for filename in ("bootloader.bin", "partitions.bin", "firmware.bin"):
+                (build / filename).write_bytes(b"input")
+            (build / "firmware.factory.bin").write_bytes(b"factory")
+            core = root / "core"
+            boot_app0 = (
+                core
+                / "packages"
+                / "framework-arduinoespressif32"
+                / "tools"
+                / "partitions"
+                / "boot_app0.bin"
+            )
+            boot_app0.parent.mkdir(parents=True)
+            boot_app0.write_bytes(b"input")
+            output = root / "output.bin"
+
+            def fake_run(command, cwd, check):
+                Path(command[command.index("--output") + 1]).write_bytes(b"wrong")
+
+            with mock.patch.object(
+                PACKAGE_INSTALLER, "platformio_core_dir", return_value=core
+            ), mock.patch.object(
+                PACKAGE_INSTALLER.subprocess, "run", side_effect=fake_run
+            ):
+                with self.assertRaisesRegex(
+                    ValueError, "differs from PlatformIO factory image"
+                ):
+                    PACKAGE_INSTALLER.merge_firmware(build, output)
 
     def test_manifest_uses_relative_versioned_firmware_asset(self):
         manifest = PACKAGE_INSTALLER.installer_manifest(
@@ -107,7 +178,7 @@ class ReleasePackagingTests(unittest.TestCase):
                 PACKAGE_INSTALLER, "merge_firmware", side_effect=fake_merge
             ):
                 PACKAGE_INSTALLER.package_installer(
-                    Path(directory) / "build", output, "1.0.0"
+                    Path(directory) / "build", output, "1.0.1"
                 )
 
             for filename in (
@@ -144,11 +215,11 @@ class ReleasePackagingTests(unittest.TestCase):
             ):
                 self.assertTrue((output / filename).is_file(), filename)
 
-            bundle = output / "transitink-zectrix-note4-v1.0.0.zip"
+            bundle = output / "transitink-zectrix-note4-v1.0.1.zip"
             self.assertTrue(bundle.is_file())
             with zipfile.ZipFile(bundle) as archive:
                 names = set(archive.namelist())
-            self.assertIn("transitink-zectrix-note4-v1.0.0.bin", names)
+            self.assertIn("transitink-zectrix-note4-v1.0.1.bin", names)
             self.assertIn("SHA256SUMS.txt", names)
             self.assertIn("legal/LICENSE.txt", names)
             self.assertIn("legal/THIRD_PARTY_DATA.md", names)
