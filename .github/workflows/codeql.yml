@@ -22,7 +22,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@ddf5ce7296213f5548c91e2dd19df2d77d2b2d66 # v3
+        uses: github/codeql-action/init@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4
         with:
           languages: c-cpp
           build-mode: manual
@@ -39,4 +39,4 @@ jobs:
         run: PLATFORMIO_CORE_DIR="$PWD/.platformio" .venv/bin/platformio run -e zectrix_note4
 
       - name: Analyze
-        uses: github/codeql-action/analyze@ddf5ce7296213f5548c91e2dd19df2d77d2b2d66 # v3
+        uses: github/codeql-action/analyze@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4
