@@ -22,6 +22,9 @@ struct DeviceConfig {
     bool sleepEnabled = SLEEP_ENABLED_DEFAULT;
     uint16_t wakeDurationMinutes = SLEEP_WAKE_DEFAULT_MINUTES;
     uint16_t sleepMaintenanceHours = SLEEP_MAINTENANCE_DEFAULT_HOURS;
+    bool scheduledWakeEnabled = SCHEDULED_WAKE_ENABLED_DEFAULT;
+    uint16_t scheduledWakeStartMinutes = SCHEDULED_WAKE_START_DEFAULT_MINUTES;
+    uint16_t scheduledWakeEndMinutes = SCHEDULED_WAKE_END_DEFAULT_MINUTES;
     transitink::WidgetSlots widgets{};
 };
 

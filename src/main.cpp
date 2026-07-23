@@ -67,6 +67,7 @@ bool factoryResetApplied = false;
 bool configAccessMode = false;
 bool dashboardVisible = false;
 bool sleepMaintenanceWake = false;
+bool scheduledWakeSession = false;
 bool sleepScreenPrepared = false;
 bool chargeStatusLogged = false;
 enum class HomeWakeRefreshPhase : uint8_t {
@@ -102,6 +103,8 @@ transitink::WidgetSnapshotSet homeWakeLoadingSnapshots();
 bool hasValidTime();
 void syncTimeAndWeatherBeforeDashboard(bool homeWake);
 bus_eta::SleepSettings sleepSettingsFromConfig();
+bool scheduledWakeWindowActiveNow();
+unsigned long long scheduledWakeDelayUs();
 void stopNetworkForSleep();
 void configureLightSleepWakeup();
 void armSleepResumeMarker();
@@ -368,7 +371,41 @@ bus_eta::SleepSettings sleepSettingsFromConfig() {
     settings.enabled = deviceConfig.sleepEnabled;
     settings.wakeDurationMinutes = deviceConfig.wakeDurationMinutes;
     settings.maintenanceHours = deviceConfig.sleepMaintenanceHours;
+    settings.scheduledWakeEnabled = deviceConfig.scheduledWakeEnabled;
+    settings.scheduledWakeStartMinutes = deviceConfig.scheduledWakeStartMinutes;
+    settings.scheduledWakeEndMinutes = deviceConfig.scheduledWakeEndMinutes;
     return settings;
+}
+
+bool localSecondOfDay(unsigned int& secondOfDay) {
+    if (!hasValidTime()) {
+        return false;
+    }
+    const time_t now = time(nullptr);
+    struct tm localTime;
+    if (localtime_r(&now, &localTime) == nullptr) {
+        return false;
+    }
+    secondOfDay = static_cast<unsigned int>(localTime.tm_hour * 60 * 60 +
+                                            localTime.tm_min * 60 +
+                                            localTime.tm_sec);
+    return true;
+}
+
+bool scheduledWakeWindowActiveNow() {
+    unsigned int secondOfDay = 0;
+    return localSecondOfDay(secondOfDay) &&
+           bus_eta::isScheduledWakeWindow(sleepSettingsFromConfig(), secondOfDay / 60);
+}
+
+unsigned long long scheduledWakeDelayUs() {
+    unsigned int secondOfDay = 0;
+    if (!localSecondOfDay(secondOfDay)) {
+        return 0;
+    }
+    const unsigned int delaySeconds =
+        bus_eta::secondsUntilScheduledWakeStart(sleepSettingsFromConfig(), secondOfDay);
+    return static_cast<unsigned long long>(delaySeconds) * 1000000ULL;
 }
 
 void stopNetworkForSleep() {
@@ -384,9 +421,12 @@ void configureLightSleepWakeup() {
     // Charge state is polled while awake. It must not be able to impersonate
     // a Home press and expose the dashboard while the device is sleeping.
 
-    const unsigned long long maintenanceUs = bus_eta::sleepMaintenanceIntervalUs(sleepSettingsFromConfig());
-    if (maintenanceUs > 0) {
-        esp_sleep_enable_timer_wakeup(maintenanceUs);
+    const bus_eta::SleepSettings settings = sleepSettingsFromConfig();
+    const unsigned long long timerUs = settings.scheduledWakeEnabled
+                                           ? scheduledWakeDelayUs()
+                                           : bus_eta::sleepMaintenanceIntervalUs(settings);
+    if (timerUs > 0) {
+        esp_sleep_enable_timer_wakeup(timerUs);
     }
 }
 
@@ -459,6 +499,7 @@ void enterSleepMode(const char* reason) {
     }
     Serial.print("Entering sleep mode: ");
     Serial.println(reason);
+    scheduledWakeSession = false;
     if (!sleepScreenPrepared) {
         transitink::hardware::clearPendingHomePress();
         dashboardVisible = false;
@@ -499,7 +540,7 @@ void enterSleepMode(const char* reason) {
         Serial.print("Light sleep wake cause: ");
         Serial.println(static_cast<int>(wakeCause));
         // configureLightSleepWakeup() clears every source before enabling only
-        // the Home GPIO and the optional maintenance timer.
+        // the Home GPIO and one optional low-power timer.
         if (wakeCause == ESP_SLEEP_WAKEUP_GPIO) {
             waitForHomeRelease();
             if (!factoryResetPendingRestart) {
@@ -508,6 +549,16 @@ void enterSleepMode(const char* reason) {
             return;
         }
         if (wakeCause == ESP_SLEEP_WAKEUP_TIMER) {
+            if (deviceConfig.scheduledWakeEnabled) {
+                if (scheduledWakeWindowActiveNow()) {
+                    Serial.println("Scheduled wake window started");
+                    scheduledWakeSession = true;
+                    returnFromLightSleep();
+                    return;
+                }
+                Serial.println("Scheduled wake occurred outside configured window");
+                continue;
+            }
             performLightSleepMaintenance();
             continue;
         }
@@ -632,6 +683,8 @@ void serviceChargeStatus(bool force) {
 void setup() {
     Serial.begin(115200);
     delay(200);
+    setenv("TZ", "HKT-8", 1);
+    tzset();
     const esp_sleep_wakeup_cause_t wakeCause = esp_sleep_get_wakeup_cause();
     const esp_reset_reason_t resetReason = esp_reset_reason();
     setupFactoryResetButtons();
@@ -684,6 +737,19 @@ void setup() {
     widgetScheduler.configure(deviceConfig.widgets, millis());
 
     if (deviceConfig.sleepEnabled && sleepMaintenanceWake) {
+        if (deviceConfig.scheduledWakeEnabled) {
+            sleepMaintenanceWake = false;
+            if (scheduledWakeWindowActiveNow()) {
+                Serial.println("Scheduled reset wake: showing dashboard");
+                scheduledWakeSession = true;
+                startHomeWakeRefresh();
+                return;
+            }
+            Serial.println("Scheduled reset wake outside window: returning to sleep");
+            sleepScreenPrepared = true;
+            enterSleepMode("scheduled wake outside window");
+            return;
+        }
         performLightSleepMaintenance();
         sleepMaintenanceWake = false;
         enterSleepMode("maintenance complete");
@@ -734,11 +800,22 @@ void loop() {
         return;
     }
     if (hasUsableConfig(deviceConfig)) {
+        const bool scheduledWakeWindowActive = scheduledWakeWindowActiveNow();
+        if (scheduledWakeWindowActive) {
+            scheduledWakeSession = true;
+        }
         const bool sleepBlocked = configAccessMode || chargeSnapshot.powerPresent ||
                                   homeWakeRefreshActive();
         if (bus_eta::shouldAutoSleep(
-                sleepSettingsFromConfig(), wakeStartedAtMs, millis(), sleepBlocked)) {
-            enterSleepMode("wake window expired");
+                sleepSettingsFromConfig(),
+                wakeStartedAtMs,
+                millis(),
+                sleepBlocked,
+                scheduledWakeSession,
+                scheduledWakeWindowActive)) {
+            enterSleepMode(scheduledWakeSession
+                               ? "scheduled wake window ended"
+                               : "button wake window expired");
         } else if (homeWakeRefreshActive()) {
             serviceHomeWakeRefresh();
         } else {

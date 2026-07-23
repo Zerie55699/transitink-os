@@ -85,6 +85,14 @@ the official region, route, direction/variation, and stop identifiers. The
 firmware migrates supported legacy route settings into the four-slot
 configuration.
 
+Power settings include an optional daily awake window, defaulting to 08:00–09:00
+when first enabled. The device schedules one low-power timer wake at the start,
+updates normally during the window, and returns to sleep at the end. Outside the
+window, the Wake Up button retains its normal configurable awake duration. To
+avoid extra battery use, periodic sleeping maintenance wakes are disabled while
+the daily window is enabled. The schedule requires the device clock to have
+been synchronized over Wi-Fi at least once since power-on.
+
 The settings portal reads its bus, Green Minibus, MTR, and Light Rail route and
 stop directories from a versioned catalog embedded in the firmware. It remains
 usable without Internet access; only ETA refreshes are live. Maintainers refresh

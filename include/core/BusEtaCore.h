@@ -76,6 +76,9 @@ struct SleepSettings {
     bool enabled = true;
     unsigned int wakeDurationMinutes = 5;
     unsigned int maintenanceHours = 12;
+    bool scheduledWakeEnabled = false;
+    unsigned int scheduledWakeStartMinutes = 8 * 60;
+    unsigned int scheduledWakeEndMinutes = 9 * 60;
 };
 
 enum class SleepResumeAction {
@@ -99,7 +102,14 @@ std::vector<DisplayEta> selectEtas(
     const RouteSelection& selection,
     long nowEpoch,
     std::size_t limit);
-bool shouldAutoSleep(const SleepSettings& settings, unsigned long wakeStartedAtMs, unsigned long nowMs, bool configAccessMode);
+bool shouldAutoSleep(const SleepSettings& settings,
+                     unsigned long wakeStartedAtMs,
+                     unsigned long nowMs,
+                     bool configAccessMode,
+                     bool scheduledWakeSession = false,
+                     bool scheduledWakeWindowActive = false);
+bool isScheduledWakeWindow(const SleepSettings& settings, unsigned int minuteOfDay);
+unsigned int secondsUntilScheduledWakeStart(const SleepSettings& settings, unsigned int secondOfDay);
 unsigned long long sleepMaintenanceIntervalUs(const SleepSettings& settings);
 SleepResumeAction decideSleepResumeAction(bool sleepMarkerPending,
                                           bool timerWake,

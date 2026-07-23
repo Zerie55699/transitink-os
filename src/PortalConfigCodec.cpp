@@ -65,6 +65,9 @@ bool encodePortalConfig(const DeviceConfig& config,
     doc["sleep_enabled"] = config.sleepEnabled;
     doc["wake_duration_minutes"] = config.wakeDurationMinutes;
     doc["sleep_maintenance_hours"] = config.sleepMaintenanceHours;
+    doc["scheduled_wake_enabled"] = config.scheduledWakeEnabled;
+    doc["scheduled_wake_start_minutes"] = config.scheduledWakeStartMinutes;
+    doc["scheduled_wake_end_minutes"] = config.scheduledWakeEndMinutes;
     doc["firmware_version"] = firmwareVersion;
     doc["csrf_token"] = csrfToken;
 

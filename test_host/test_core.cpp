@@ -88,6 +88,9 @@ int main() {
     assert(sleepSettings.enabled);
     assert(sleepSettings.wakeDurationMinutes == 5);
     assert(sleepSettings.maintenanceHours == 12);
+    assert(!sleepSettings.scheduledWakeEnabled);
+    assert(sleepSettings.scheduledWakeStartMinutes == 8 * 60);
+    assert(sleepSettings.scheduledWakeEndMinutes == 9 * 60);
     assert(!bus_eta::shouldAutoSleep(sleepSettings, 1000, 1000 + 5 * 60 * 1000 - 1, false));
     assert(bus_eta::shouldAutoSleep(sleepSettings, 1000, 1000 + 5 * 60 * 1000, false));
     assert(!bus_eta::shouldAutoSleep(sleepSettings, 1000, 1000 + 6 * 60 * 1000, true));
@@ -100,6 +103,31 @@ int main() {
     assert(bus_eta::sleepMaintenanceIntervalUs(sleepSettings) == 43200000000ULL);
     sleepSettings.maintenanceHours = 0;
     assert(bus_eta::sleepMaintenanceIntervalUs(sleepSettings) == 0);
+
+    sleepSettings.maintenanceHours = 12;
+    sleepSettings.scheduledWakeEnabled = true;
+    assert(bus_eta::isScheduledWakeWindow(sleepSettings, 8 * 60));
+    assert(bus_eta::isScheduledWakeWindow(sleepSettings, 8 * 60 + 59));
+    assert(!bus_eta::isScheduledWakeWindow(sleepSettings, 7 * 60 + 59));
+    assert(!bus_eta::isScheduledWakeWindow(sleepSettings, 9 * 60));
+    assert(bus_eta::secondsUntilScheduledWakeStart(sleepSettings, 7 * 60 * 60 + 59 * 60 + 30) == 30);
+    assert(bus_eta::secondsUntilScheduledWakeStart(sleepSettings, 8 * 60 * 60) == 24 * 60 * 60);
+    assert(bus_eta::secondsUntilScheduledWakeStart(sleepSettings, 9 * 60 * 60) == 23 * 60 * 60);
+    assert(bus_eta::sleepMaintenanceIntervalUs(sleepSettings) == 0);
+    assert(!bus_eta::shouldAutoSleep(
+        sleepSettings, 1000, 1000 + 60 * 1000, false, true, true));
+    assert(bus_eta::shouldAutoSleep(
+        sleepSettings, 1000, 1000 + 60 * 1000, false, true, false));
+
+    sleepSettings.scheduledWakeStartMinutes = 22 * 60;
+    sleepSettings.scheduledWakeEndMinutes = 6 * 60;
+    assert(bus_eta::isScheduledWakeWindow(sleepSettings, 23 * 60));
+    assert(bus_eta::isScheduledWakeWindow(sleepSettings, 5 * 60 + 59));
+    assert(!bus_eta::isScheduledWakeWindow(sleepSettings, 12 * 60));
+    sleepSettings.scheduledWakeEndMinutes = sleepSettings.scheduledWakeStartMinutes;
+    assert(!bus_eta::isScheduledWakeWindow(sleepSettings, 23 * 60));
+    sleepSettings.scheduledWakeEnabled = false;
+    assert(bus_eta::secondsUntilScheduledWakeStart(sleepSettings, 0) == 0);
 
     using bus_eta::SleepResumeAction;
     assert(bus_eta::decideSleepResumeAction(false, false, false, false, false) ==

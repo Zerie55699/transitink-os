@@ -71,6 +71,9 @@ DeviceConfig roundTripConfig() {
     config.wifiSsid = "TransitInk-Test";
     config.wifiPassword = "password";
     config.weatherLocationTc = "香港天文台";
+    config.scheduledWakeEnabled = true;
+    config.scheduledWakeStartMinutes = 8 * 60;
+    config.scheduledWakeEndMinutes = 9 * 60;
     config.widgets[0] = validBus();
     config.widgets[1] = validMtr();
     config.widgets[2] = validJourney();
@@ -146,6 +149,12 @@ void test_has_usable_config_requires_valid_complete_schema() {
     config.widgets[1] = transitink::WidgetConfig{};
     config.weatherLocationTc = repeated('W', transitink::kMaxCommonConfigTextBytes + 1);
     TEST_ASSERT_FALSE(hasUsableConfig(config));
+
+    config.weatherLocationTc = "香港天文台";
+    config.scheduledWakeEnabled = true;
+    config.scheduledWakeStartMinutes = 480;
+    config.scheduledWakeEndMinutes = 480;
+    TEST_ASSERT_FALSE(hasUsableConfig(config));
 }
 
 void test_v2_round_trip_uses_exact_active_payloads() {
@@ -192,6 +201,30 @@ void test_v2_round_trip_uses_exact_active_payloads() {
     TEST_ASSERT_EQUAL_STRING("YUL", parsed.widgets[1].mtr.stationId.c_str());
     TEST_ASSERT_EQUAL_STRING("KOWLOON", parsed.widgets[2].journeyTime.destinationId.c_str());
     TEST_ASSERT_EQUAL_STRING("20003337", parsed.widgets[3].gmb.stopId.c_str());
+    TEST_ASSERT_TRUE(doc["scheduled_wake_enabled"].as<bool>());
+    TEST_ASSERT_EQUAL_UINT16(8 * 60, doc["scheduled_wake_start_minutes"].as<uint16_t>());
+    TEST_ASSERT_EQUAL_UINT16(9 * 60, doc["scheduled_wake_end_minutes"].as<uint16_t>());
+    TEST_ASSERT_TRUE(parsed.scheduledWakeEnabled);
+    TEST_ASSERT_EQUAL_UINT16(8 * 60, parsed.scheduledWakeStartMinutes);
+    TEST_ASSERT_EQUAL_UINT16(9 * 60, parsed.scheduledWakeEndMinutes);
+}
+
+void test_scheduled_wake_rejects_invalid_windows_without_mutation() {
+    DeviceConfig parsed = sentinelConfig();
+    String error;
+    std::string invalidJson = v2Json(disabledWidgets(4));
+    invalidJson.pop_back();
+    invalidJson += R"(,"scheduled_wake_enabled":true,"scheduled_wake_start_minutes":480,"scheduled_wake_end_minutes":480})";
+    TEST_ASSERT_FALSE(parseDeviceConfigJson(invalidJson.c_str(), parsed, error));
+    TEST_ASSERT_FALSE(error.empty());
+    assertSentinelPreserved(parsed);
+
+    DeviceConfig invalid = roundTripConfig();
+    invalid.scheduledWakeEndMinutes = invalid.scheduledWakeStartMinutes;
+    DeviceConfigSerializationMetrics metrics;
+    String json;
+    TEST_ASSERT_FALSE(serializeDeviceConfigJsonChecked(invalid, json, metrics, error));
+    TEST_ASSERT_TRUE(json.empty());
 }
 
 void test_parse_failures_preserve_the_original_config() {
@@ -318,6 +351,9 @@ void test_portal_get_redacts_password_and_round_trips_four_slots() {
     TEST_ASSERT_EQUAL_STRING("0123456789abcdef0123456789abcdef",
                              doc["csrf_token"].as<const char*>());
     TEST_ASSERT_EQUAL_UINT8(73, doc["battery"]["percent"].as<uint8_t>());
+    TEST_ASSERT_TRUE(doc["scheduled_wake_enabled"].as<bool>());
+    TEST_ASSERT_EQUAL_UINT16(8 * 60, doc["scheduled_wake_start_minutes"].as<uint16_t>());
+    TEST_ASSERT_EQUAL_UINT16(9 * 60, doc["scheduled_wake_end_minutes"].as<uint16_t>());
     TEST_ASSERT_EQUAL(std::string::npos, json.find("never-return-this"));
 }
 
@@ -459,6 +495,7 @@ int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_has_usable_config_requires_valid_complete_schema);
     RUN_TEST(test_v2_round_trip_uses_exact_active_payloads);
+    RUN_TEST(test_scheduled_wake_rejects_invalid_windows_without_mutation);
     RUN_TEST(test_parse_failures_preserve_the_original_config);
     RUN_TEST(test_legacy_decode_migrates_directly_to_widget_slots);
     RUN_TEST(test_maximum_valid_config_stays_within_capacity_headroom);

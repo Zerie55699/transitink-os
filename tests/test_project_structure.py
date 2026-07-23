@@ -114,7 +114,7 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertIn('#define FIRMWARE_PRODUCT_NAME "TransitInk OS"', config)
         self.assertIn('#define FIRMWARE_SHORT_NAME "TransitInk"', config)
         self.assertIn("#define CONFIG_AP_PREFIX FIRMWARE_SHORT_NAME", config)
-        self.assertIn('#define FIRMWARE_VERSION "1.0.1"', config)
+        self.assertIn('#define FIRMWARE_VERSION "1.0.2"', config)
         self.assertNotIn("Bus ETA Note 4", config + readme)
         self.assertNotIn("巴士 ETA", config + readme)
         self.assertTrue(readme.startswith("# TransitInk OS"))
@@ -367,7 +367,7 @@ class ProjectStructureTests(unittest.TestCase):
 
         config = read_text("include/ProductConfig.h")
         profile_test = read_text("test_host/test_board_profile.cpp")
-        self.assertIn('#define FIRMWARE_VERSION "1.0.1"', config)
+        self.assertIn('#define FIRMWARE_VERSION "1.0.2"', config)
         self.assertIn("battery.adcPin == 4", profile_test)
         self.assertIn("battery.sensePowerPin == 17", profile_test)
         self.assertIn("battery.chargeDetectPin == 2", profile_test)
@@ -780,11 +780,17 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertIn("#define SLEEP_ENABLED_DEFAULT 1", config)
         self.assertIn("#define SLEEP_WAKE_DEFAULT_MINUTES 5", config)
         self.assertIn("#define SLEEP_MAINTENANCE_DEFAULT_HOURS 12", config)
+        self.assertIn("#define SCHEDULED_WAKE_ENABLED_DEFAULT 0", config)
+        self.assertIn("#define SCHEDULED_WAKE_START_DEFAULT_MINUTES 480", config)
+        self.assertIn("#define SCHEDULED_WAKE_END_DEFAULT_MINUTES 540", config)
 
         app_config = read_text("include/AppConfig.h")
         self.assertIn("bool sleepEnabled = SLEEP_ENABLED_DEFAULT", app_config)
         self.assertIn("uint16_t wakeDurationMinutes = SLEEP_WAKE_DEFAULT_MINUTES", app_config)
         self.assertIn("uint16_t sleepMaintenanceHours = SLEEP_MAINTENANCE_DEFAULT_HOURS", app_config)
+        self.assertIn("bool scheduledWakeEnabled = SCHEDULED_WAKE_ENABLED_DEFAULT", app_config)
+        self.assertIn("uint16_t scheduledWakeStartMinutes = SCHEDULED_WAKE_START_DEFAULT_MINUTES", app_config)
+        self.assertIn("uint16_t scheduledWakeEndMinutes = SCHEDULED_WAKE_END_DEFAULT_MINUTES", app_config)
 
         config_impl = read_text("src/AppConfig.cpp")
         self.assertIn('parsed.sleepEnabled = doc["sleep_enabled"] | static_cast<bool>(SLEEP_ENABLED_DEFAULT)', config_impl)
@@ -796,21 +802,32 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertIn('doc["sleep_enabled"] = config.sleepEnabled', config_impl)
         self.assertIn('doc["wake_duration_minutes"] = config.wakeDurationMinutes', config_impl)
         self.assertIn('doc["sleep_maintenance_hours"] = config.sleepMaintenanceHours', config_impl)
+        self.assertIn('doc["scheduled_wake_enabled"] = config.scheduledWakeEnabled', config_impl)
+        self.assertIn('doc["scheduled_wake_start_minutes"] = config.scheduledWakeStartMinutes', config_impl)
+        self.assertIn('doc["scheduled_wake_end_minutes"] = config.scheduledWakeEndMinutes', config_impl)
 
         page = read_text("src/TransitInkPortalPage.cpp")
         self.assertIn('id="sleep_enabled"', page)
         self.assertIn('id="wake_duration_minutes"', page)
         self.assertIn('id="sleep_maintenance_hours"', page)
+        self.assertIn('id="scheduled_wake_enabled"', page)
+        self.assertIn('id="scheduled_wake_start"', page)
+        self.assertIn('id="scheduled_wake_end"', page)
         self.assertIn("省電睡眠模式", page)
-        self.assertIn("醒著時間", page)
+        self.assertIn("按鍵喚醒後保持醒著", page)
         self.assertIn("睡眠中時間及天氣同步", page)
         self.assertIn("不會喚醒畫面或更新即時交通資料；輸入 0 代表停用。", page)
+        self.assertIn("每日定時喚醒", page)
+        self.assertIn("其他時間仍可按 Wake Up 鍵喚醒", page)
         self.assertIn("byId('sleep_enabled').checked=cfg.sleep_enabled!==false", page)
         self.assertIn("byId('wake_duration_minutes').value=cfg.wake_duration_minutes||5", page)
         self.assertIn("byId('sleep_maintenance_hours').value=cfg.sleep_maintenance_hours??12", page)
         self.assertIn("sleep_enabled:byId('sleep_enabled').checked", page)
         self.assertIn("wake_duration_minutes:Number(byId('wake_duration_minutes').value||5)", page)
         self.assertIn("sleep_maintenance_hours:Number(byId('sleep_maintenance_hours').value||0)", page)
+        self.assertIn("scheduled_wake_enabled:byId('scheduled_wake_enabled').checked", page)
+        self.assertIn("scheduled_wake_start_minutes:timeToMinutes(byId('scheduled_wake_start').value)", page)
+        self.assertIn("scheduled_wake_end_minutes:timeToMinutes(byId('scheduled_wake_end').value)", page)
         for cadence in (
             "<span>港鐵 ETA</span><strong>每 30 秒</strong>",
             "<span>巴士 ETA</span><strong>每 60 秒</strong>",
@@ -837,9 +854,11 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertIn("bool consumeSleepResumeMarker()", main)
         self.assertIn("bus_eta::SleepSettings sleepSettingsFromConfig", main)
         self.assertIn("const bool sleepBlocked = configAccessMode || chargeSnapshot.powerPresent", main)
+        self.assertIn("scheduledWakeSession", main)
+        self.assertIn("scheduledWakeWindowActiveNow()", main)
         self.assertRegex(
             main,
-            r"bus_eta::shouldAutoSleep\(\s*sleepSettingsFromConfig\(\), wakeStartedAtMs, millis\(\), sleepBlocked\)",
+            r"bus_eta::shouldAutoSleep\(\s*sleepSettingsFromConfig\(\),\s*wakeStartedAtMs,\s*millis\(\),\s*sleepBlocked,\s*scheduledWakeSession,\s*scheduledWakeWindowActive\)",
         )
         self.assertIn("configPortal.stop();", main)
         self.assertIn("WiFi.disconnect(true, true)", main)
@@ -855,7 +874,7 @@ class ProjectStructureTests(unittest.TestCase):
             wake_config,
             "esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);",
             "transitink::hardware::configureHomeWakeup();",
-            "esp_sleep_enable_timer_wakeup(maintenanceUs);",
+            "esp_sleep_enable_timer_wakeup(timerUs);",
         )
         self.assertIn("esp_sleep_enable_gpio_wakeup()", support)
         self.assertIn("esp_light_sleep_start()", main)
@@ -863,6 +882,7 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertNotIn("esp_sleep_enable_ext0_wakeup", main)
         self.assertIn("esp_sleep_enable_timer_wakeup", main)
         self.assertIn("sleepMaintenanceIntervalUs", main)
+        self.assertIn("secondsUntilScheduledWakeStart", main)
         self.assertIn("wakeCause == ESP_SLEEP_WAKEUP_TIMER", main)
         self.assertIn("wakeCause == ESP_SLEEP_WAKEUP_GPIO", main)
         self.assertIn("waitForHomeRelease();", main)

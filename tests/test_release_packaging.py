@@ -18,7 +18,7 @@ SPEC.loader.exec_module(PACKAGE_INSTALLER)
 
 class ReleasePackagingTests(unittest.TestCase):
     def test_firmware_version_comes_from_product_config(self):
-        self.assertEqual("1.0.1", PACKAGE_INSTALLER.firmware_version())
+        self.assertEqual("1.0.2", PACKAGE_INSTALLER.firmware_version())
 
     def test_merge_preserves_flash_mode_and_matches_factory_image(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -206,7 +206,7 @@ class ReleasePackagingTests(unittest.TestCase):
                 PACKAGE_INSTALLER, "merge_firmware", side_effect=fake_merge
             ):
                 PACKAGE_INSTALLER.package_installer(
-                    Path(directory) / "build", output, "1.0.1"
+                    Path(directory) / "build", output, "1.0.2"
                 )
 
             for filename in (
@@ -243,11 +243,11 @@ class ReleasePackagingTests(unittest.TestCase):
             ):
                 self.assertTrue((output / filename).is_file(), filename)
 
-            bundle = output / "transitink-zectrix-note4-v1.0.1.zip"
+            bundle = output / "transitink-zectrix-note4-v1.0.2.zip"
             self.assertTrue(bundle.is_file())
             with zipfile.ZipFile(bundle) as archive:
                 names = set(archive.namelist())
-            self.assertIn("transitink-zectrix-note4-v1.0.1.bin", names)
+            self.assertIn("transitink-zectrix-note4-v1.0.2.bin", names)
             self.assertIn("SHA256SUMS.txt", names)
             self.assertIn("legal/LICENSE.txt", names)
             self.assertIn("legal/THIRD_PARTY_DATA.md", names)

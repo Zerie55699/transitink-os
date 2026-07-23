@@ -28,6 +28,14 @@ bool areCommonFieldsWithinLimits(const DeviceConfig& config) {
            isStringWithinLimit(config.weatherLocationTc, transitink::kMaxCommonConfigTextBytes);
 }
 
+bool isScheduledWakeValid(const DeviceConfig& config) {
+    constexpr uint16_t kMinutesPerDay = 24 * 60;
+    return config.scheduledWakeStartMinutes < kMinutesPerDay &&
+           config.scheduledWakeEndMinutes < kMinutesPerDay &&
+           (!config.scheduledWakeEnabled ||
+            config.scheduledWakeStartMinutes != config.scheduledWakeEndMinutes);
+}
+
 bool areWidgetsValid(const DeviceConfig& config) {
     for (const auto& widget : config.widgets) {
         if (!transitink::isWidgetConfigValid(widget)) {
@@ -72,6 +80,13 @@ void copyCommonFields(const JsonDocument& doc, DeviceConfig& parsed) {
     if (parsed.sleepMaintenanceHours > 24) {
         parsed.sleepMaintenanceHours = 24;
     }
+    parsed.scheduledWakeEnabled = doc.containsKey("scheduled_wake_enabled")
+                                      ? doc["scheduled_wake_enabled"].as<bool>()
+                                      : static_cast<bool>(SCHEDULED_WAKE_ENABLED_DEFAULT);
+    parsed.scheduledWakeStartMinutes =
+        doc["scheduled_wake_start_minutes"] | SCHEDULED_WAKE_START_DEFAULT_MINUTES;
+    parsed.scheduledWakeEndMinutes =
+        doc["scheduled_wake_end_minutes"] | SCHEDULED_WAKE_END_DEFAULT_MINUTES;
 }
 
 bool parseWidget(JsonObjectConst item, transitink::WidgetConfig& widget) {
@@ -219,6 +234,10 @@ bool parseDeviceConfigJson(const String& json, DeviceConfig& config, String& err
         error = "共用設定欄位過長";
         return false;
     }
+    if (!isScheduledWakeValid(*parsed)) {
+        error = "每日定時喚醒時段無效";
+        return false;
+    }
 
     if (doc.containsKey("schema_version")) {
         if (doc["schema_version"].as<uint16_t>() != transitink::kConfigSchemaVersion) {
@@ -307,6 +326,10 @@ bool serializeDeviceConfigJsonChecked(const DeviceConfig& config,
         error = "共用設定欄位過長";
         return false;
     }
+    if (!isScheduledWakeValid(config)) {
+        error = "每日定時喚醒時段無效";
+        return false;
+    }
     if (!areWidgetsValid(config)) {
         error = "小工具設定無效";
         return false;
@@ -320,6 +343,9 @@ bool serializeDeviceConfigJsonChecked(const DeviceConfig& config,
     doc["sleep_enabled"] = config.sleepEnabled;
     doc["wake_duration_minutes"] = config.wakeDurationMinutes;
     doc["sleep_maintenance_hours"] = config.sleepMaintenanceHours;
+    doc["scheduled_wake_enabled"] = config.scheduledWakeEnabled;
+    doc["scheduled_wake_start_minutes"] = config.scheduledWakeStartMinutes;
+    doc["scheduled_wake_end_minutes"] = config.scheduledWakeEndMinutes;
     JsonArray widgets = doc.createNestedArray("widgets");
     for (const auto& widget : config.widgets) {
         JsonObject item = widgets.createNestedObject();
@@ -348,7 +374,7 @@ bool serializeDeviceConfigJsonChecked(const DeviceConfig& config,
 
 bool hasUsableConfig(const DeviceConfig& config) {
     if (config.schemaVersion != transitink::kConfigSchemaVersion || config.wifiSsid.length() == 0 ||
-        !areCommonFieldsWithinLimits(config)) {
+        !areCommonFieldsWithinLimits(config) || !isScheduledWakeValid(config)) {
         return false;
     }
     return areWidgetsValid(config);

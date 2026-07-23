@@ -146,16 +146,64 @@ bool DebouncedButtonPressDetector::update(bool pressed, unsigned long nowMs) {
     return stablePressed_;
 }
 
-bool shouldAutoSleep(const SleepSettings& settings, unsigned long wakeStartedAtMs, unsigned long nowMs, bool configAccessMode) {
-    if (!settings.enabled || configAccessMode || settings.wakeDurationMinutes == 0 || wakeStartedAtMs == 0) {
+bool shouldAutoSleep(const SleepSettings& settings,
+                     unsigned long wakeStartedAtMs,
+                     unsigned long nowMs,
+                     bool configAccessMode,
+                     bool scheduledWakeSession,
+                     bool scheduledWakeWindowActive) {
+    if (!settings.enabled || configAccessMode) {
+        return false;
+    }
+    if (settings.scheduledWakeEnabled) {
+        if (scheduledWakeWindowActive) {
+            return false;
+        }
+        if (scheduledWakeSession) {
+            return true;
+        }
+    }
+    if (settings.wakeDurationMinutes == 0 || wakeStartedAtMs == 0) {
         return false;
     }
     const unsigned long wakeDurationMs = settings.wakeDurationMinutes * 60UL * 1000UL;
     return nowMs - wakeStartedAtMs >= wakeDurationMs;
 }
 
+bool isScheduledWakeWindow(const SleepSettings& settings, unsigned int minuteOfDay) {
+    constexpr unsigned int kMinutesPerDay = 24 * 60;
+    const unsigned int start = settings.scheduledWakeStartMinutes;
+    const unsigned int end = settings.scheduledWakeEndMinutes;
+    if (!settings.enabled || !settings.scheduledWakeEnabled ||
+        minuteOfDay >= kMinutesPerDay || start >= kMinutesPerDay ||
+        end >= kMinutesPerDay || start == end) {
+        return false;
+    }
+    if (start < end) {
+        return minuteOfDay >= start && minuteOfDay < end;
+    }
+    return minuteOfDay >= start || minuteOfDay < end;
+}
+
+unsigned int secondsUntilScheduledWakeStart(const SleepSettings& settings, unsigned int secondOfDay) {
+    constexpr unsigned int kSecondsPerDay = 24 * 60 * 60;
+    constexpr unsigned int kMinutesPerDay = 24 * 60;
+    if (!settings.enabled || !settings.scheduledWakeEnabled ||
+        secondOfDay >= kSecondsPerDay ||
+        settings.scheduledWakeStartMinutes >= kMinutesPerDay ||
+        settings.scheduledWakeEndMinutes >= kMinutesPerDay ||
+        settings.scheduledWakeStartMinutes == settings.scheduledWakeEndMinutes) {
+        return 0;
+    }
+    const unsigned int startSecond = settings.scheduledWakeStartMinutes * 60;
+    if (startSecond > secondOfDay) {
+        return startSecond - secondOfDay;
+    }
+    return kSecondsPerDay - secondOfDay + startSecond;
+}
+
 unsigned long long sleepMaintenanceIntervalUs(const SleepSettings& settings) {
-    if (!settings.enabled || settings.maintenanceHours == 0) {
+    if (!settings.enabled || settings.scheduledWakeEnabled || settings.maintenanceHours == 0) {
         return 0;
     }
     return static_cast<unsigned long long>(settings.maintenanceHours) * 60ULL * 60ULL * 1000000ULL;
