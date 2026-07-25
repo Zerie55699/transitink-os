@@ -162,4 +162,16 @@ DisplayTextPlan planTruncatedUtf8(const std::string& text,
     return plan;
 }
 
+std::string withoutTrailingParentheticalQualifier(const std::string& text) {
+    if (text.size() < 4 || text.back() != ')') {
+        return text;
+    }
+    const std::size_t qualifierStart = text.rfind(" (");
+    if (qualifierStart == std::string::npos ||
+        qualifierStart + 3 >= text.size()) {
+        return text;
+    }
+    return text.substr(0, qualifierStart);
+}
+
 }  // namespace transitink

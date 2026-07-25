@@ -3,6 +3,8 @@
 #include <string>
 #include <vector>
 
+#include "core/CatalogCore.h"
+#include "core/StaticCatalogCore.h"
 #include "core/WidgetCore.h"
 
 namespace transitink {
@@ -14,17 +16,22 @@ struct GmbCatalogDirection {
     std::string originLabelTc;
     std::string destinationLabelTc;
     std::string descriptionTc;
+    std::string originLabelEn{};
+    std::string destinationLabelEn{};
+    std::string descriptionEn{};
 };
 
 struct GmbCatalogStop {
     std::string stopId;
     std::string stopSeq;
     std::string labelTc;
+    std::string labelEn{};
 };
 
 }  // namespace transitink
 
 bool isOfficialBusIdentifier(const std::string& value);
+bool isOfficialTflIdentifier(const std::string& value);
 bool mapCitybusDirectionPath(const std::string& direction, std::string& path);
 
 bool parseCitybusEtaJson(const char* json,
@@ -36,6 +43,43 @@ bool parseKmbEtaJson(const char* json,
                      const transitink::BusWidgetConfig& config,
                      std::vector<transitink::BusEtaRecord>& records,
                      std::string& error);
+
+bool parseTflDirectionsJson(
+    const char* json,
+    const std::string& route,
+    std::vector<transitink::BusCatalogRoute>& directions,
+    std::string& error);
+
+bool parseTflRouteSequenceJson(
+    const char* json,
+    const std::string& route,
+    const std::string& direction,
+    const std::string& serviceType,
+    std::vector<transitink::BusCatalogStop>& stops,
+    std::string& error);
+
+bool parseTflEtaJson(const char* json,
+                     const transitink::BusWidgetConfig& config,
+                     int64_t nowEpoch,
+                     std::vector<transitink::BusEtaRecord>& records,
+                     std::string& error);
+
+bool parseTflRailLinesJson(
+    const char* json,
+    std::vector<transitink::StaticCatalogEntry>& lines,
+    std::string& error);
+
+bool parseTflRailStationsJson(
+    const char* json,
+    std::vector<transitink::StaticCatalogEntry>& stations,
+    std::string& error);
+
+bool parseTflRailArrivalsJson(
+    const char* json,
+    const transitink::MtrWidgetConfig& config,
+    int64_t nowEpoch,
+    std::vector<transitink::RailArrivalRecord>& records,
+    std::string& error);
 
 bool parseMtrNextTrainJson(const char* json,
                            const transitink::MtrWidgetConfig& config,

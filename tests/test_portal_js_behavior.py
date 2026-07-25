@@ -8,6 +8,150 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class PortalJavaScriptBehaviorTests(unittest.TestCase):
+    def test_widget_pages_render_four_positions_and_move_across_page_boundaries(self):
+        source = (ROOT / "src/TransitInkPortalPage.cpp").read_text()
+        script = source.split("<script>", 1)[1].split("</script>", 1)[0]
+        script = script.split("byId('config_form').addEventListener", 1)[0]
+        harness = r"""
+const elements={};
+function element(id){return elements[id]||(elements[id]={id,value:'',checked:false,hidden:false,innerHTML:'',textContent:'',disabled:false,selectedOptions:[],setAttribute(name,value){this[name]=value},insertAdjacentHTML(){},focus(){}})}
+global.document={getElementById:element,querySelector(){return element('primary')},querySelectorAll(){return[]}};
+element('wifi_ssid').value='TransitInk';
+element('weather_location').value='香港天文台';
+widgetDrafts=Array.from({length:widgetSlotCount},()=>emptyWidget());
+widgetDrafts[3].type='bus_eta';
+widgetDrafts[3].bus.route_id='43X';
+widgetDrafts[4].type='journey_time';
+widgetDrafts[4].journey_time.location_id='H1';
+widgetDrafts[4].journey_time.destination_id='CH';
+renderWidgetCards();
+if((element('widget_page_tabs').innerHTML.match(/widget-page-tab/g)||[]).length!==3)throw new Error('沒有三個頁面選擇');
+if((element('widget_cards').innerHTML.match(/widget-card/g)||[]).length!==4)throw new Error('頁面沒有維持四個位置');
+if(!element('widget_page_tabs').innerHTML.includes('已設定 1/4'))throw new Error('頁面沒有顯示已設定數量');
+selectWidgetPage(1);
+if(selectedWidgetPage!==1||expandedSlot!==4)throw new Error('切換頁面沒有同步展開位置');
+if(!element('widget_cards').innerHTML.includes('第 2 頁，位置 1'))throw new Error('位置沒有標示所屬頁面');
+moveWidget(4,-1);
+if(selectedWidgetPage!==0||expandedSlot!==3||widgetDrafts[3].type!=='journey_time'||widgetDrafts[4].type!=='bus_eta')throw new Error('跨頁移動沒有保持全域次序');
+const payload=collectConfig();
+if(payload.schema_version!==3||payload.widgets.length!==12)throw new Error('沒有輸出三頁設定');
+process.stdout.write('ok');
+"""
+        completed = subprocess.run(
+            ["node", "-e", script + harness],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            timeout=10,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(completed.stdout, "ok")
+
+    def test_first_setup_uses_embedded_london_bus_and_rail_catalogues(self):
+        source = (ROOT / "src/TransitInkPortalPage.cpp").read_text()
+        script = source.split("<script>", 1)[1].split("</script>", 1)[0]
+        script = script.split("byId('config_form').addEventListener", 1)[0]
+        harness = r"""
+const elements={};
+function element(id){return elements[id]||(elements[id]={id,value:'',checked:false,hidden:false,innerHTML:'',textContent:'',disabled:false,selectedOptions:[],dataset:{},setAttribute(name,value){this[name]=value},setCustomValidity(){},insertAdjacentHTML(){},focus(){}})}
+global.document={getElementById:element,querySelector(){return element('primary')},querySelectorAll(){return[]}};
+global.fetch=path=>Promise.reject(new Error(`unexpected online catalogue request: ${path}`));
+localCatalog.index={bus:{tfl:{routes:{'24':[{
+  direction_id:'inbound',service_type:'A|B',
+  origin_label_tc:'South End Green',destination_label_tc:'Grosvenor Road',
+  origin_label_en:'South End Green',destination_label_en:'Grosvenor Road',
+  stop_key:'24:inbound:A|B'
+}]}}}};
+localCatalog.providers.tfl={routes:{'24:inbound:A|B':[
+  {id:'490012280A',label_tc:'South End Green',label_en:'South End Green',sequence:1}
+]}};
+localCatalog.rail={modes:{london_rail:[{
+  id:'victoria',label_tc:'Victoria',label_en:'Victoria',
+  stations:[{id:'940GZZLUOXC',label_tc:'Oxford Circus',label_en:'Oxford Circus'}],
+  directions:[{id:'inbound',label_tc:'Inbound',label_en:'Inbound'}]
+}]}};
+
+widgetDrafts[0]=emptyWidget();
+widgetDrafts[0].type='bus_eta';
+widgetDrafts[0].bus.operator='tfl';
+widgetDrafts[0].bus.route_id='24';
+expandedSlot=0;
+ensureCatalogForSlot(0);
+if(catalogState[0].busRoutes.items[0]?.id!=='24')throw new Error('Embedded London bus route was not listed');
+if(catalogState[0].busDirections.items[0]?.service_type!=='A|B')throw new Error('Embedded London bus direction was not listed');
+widgetDrafts[0].bus.direction_id='inbound';
+widgetDrafts[0].bus.service_type='A|B';
+ensureCatalogForSlot(0);
+if(catalogState[0].busStops.items[0]?.id!=='490012280A')throw new Error('Embedded London bus stop was not listed');
+
+  widgetDrafts[0]=emptyWidget();
+  widgetDrafts[0].type='mtr_eta';
+  widgetDrafts[0].mtr.mode='london_rail';
+  widgetDrafts[0].mtr.line_or_route_id='victoria';
+  widgetDrafts[0].mtr.station_id='940GZZLUOXC';
+  expandedSlot=0;
+  catalogState[0]=emptyCatalogState();
+  ensureCatalogForSlot(0);
+  if(catalogState[0].railLines.items[0]?.id!=='victoria')throw new Error('Embedded London rail line was not listed');
+  if(catalogState[0].railStations.items[0]?.id!=='940GZZLUOXC')throw new Error('Embedded London rail station was not listed');
+  if(catalogState[0].railDirections.items[0]?.id!=='inbound')throw new Error('Embedded London rail direction was not listed');
+  process.stdout.write('ok');
+"""
+        completed = subprocess.run(
+            ["node", "-e", "global.location={pathname:'/'};" + script + harness],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            timeout=10,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(completed.stdout, "ok")
+
+    def test_language_switch_rerenders_widgets_and_persists_locale(self):
+        source = (ROOT / "src/TransitInkPortalPage.cpp").read_text()
+        script = source.split("<script>", 1)[1].split("</script>", 1)[0]
+        script = script.split("byId('config_form').addEventListener", 1)[0]
+        harness = r"""
+const elements={};
+function element(id){return elements[id]||(elements[id]={id,value:'',checked:false,hidden:false,innerHTML:'',textContent:'',disabled:false,selectedOptions:[],setAttribute(name,value){this[name]=value},insertAdjacentHTML(){},focus(){}})}
+global.document={
+  title:'',
+  documentElement:{setAttribute(name,value){this[name]=value}},
+  getElementById:element,
+  querySelector(){return element('primary')},
+  querySelectorAll(){return[]}
+};
+element('wifi_ssid').value='TransitInk';
+element('weather_location').value='uk:london';
+element('time_zone').value='Europe/London';
+widgetDrafts=Array.from({length:widgetSlotCount},()=>emptyWidget());
+widgetDrafts[0].type='bus_eta';
+expandedSlot=0;
+setPortalLocale('en-GB');
+const english=element('widget_cards').innerHTML;
+if(portalLocale!=='en-GB'||element('ui_locale').value!=='en-GB')throw new Error('English locale was not applied');
+if(document.documentElement.lang!=='en-GB'||!document.title.includes('Device settings'))throw new Error('Document language was not updated');
+if(!english.includes('Widget type')||!english.includes('Move up')||!english.includes('Bus setup is incomplete'))throw new Error('Dynamic widget text was not translated');
+setWeatherRegion('uk');
+if(element('weather_region').value!=='uk'||element('weather_location').value!=='uk:london'||element('weather_location').innerHTML.includes('Hong Kong Observatory')||element('uk_weather_attribution').hidden)throw new Error('UK weather locations were not filtered at the parent level');
+setWeatherRegion('hk');
+if(element('weather_region').value!=='hk'||element('weather_location').value!=='香港天文台'||element('weather_location').innerHTML.includes('London')||!element('uk_weather_attribution').hidden)throw new Error('Hong Kong weather locations were not isolated');
+setWeatherRegion('uk');
+if(collectConfig().ui_locale!=='en-GB'||collectConfig().weather_location_tc!=='uk:london'||collectConfig().time_zone!=='Europe/London')throw new Error('English locale, UK weather, or time zone was not included in the saved config');
+setPortalLocale('zh-HK');
+if(!element('widget_cards').innerHTML.includes('小工具類型')||collectConfig().ui_locale!=='zh-HK')throw new Error('Traditional Chinese locale was not restored');
+process.stdout.write('ok');
+"""
+        completed = subprocess.run(
+            ["node", "-e", script + harness],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            timeout=10,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(completed.stdout, "ok")
+
     def test_lan_portal_fetches_include_session_access_token(self):
         source = (ROOT / "src/TransitInkPortalPage.cpp").read_text()
         script = source.split("<script>", 1)[1].split("</script>", 1)[0]
@@ -25,6 +169,53 @@ global.fetch=(path,options)=>{captured={path,options};return Promise.resolve({ok
 """
         completed = subprocess.run(
             ["node", "-e", "global.location={pathname:'/SESSION123'};" + script + harness],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            timeout=10,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(completed.stdout, "ok")
+
+    def test_portal_serializes_device_requests_and_keeps_parallel_catalog_results(self):
+        source = (ROOT / "src/TransitInkPortalPage.cpp").read_text()
+        script = source.split("<script>", 1)[1].split("</script>", 1)[0]
+        script = script.split("byId('config_form').addEventListener", 1)[0]
+        harness = r"""
+const elements={};
+function element(id){return elements[id]||(elements[id]={id,value:'',checked:false,hidden:false,innerHTML:'',textContent:'',disabled:false,selectedOptions:[],setAttribute(){},insertAdjacentHTML(){},focus(){}})}
+global.document={getElementById:element,querySelector(){return element('primary')}};
+const calls=[];
+let releaseFirst;
+global.fetch=(path)=>{
+  calls.push(path);
+  if(path==='/first')return Promise.resolve({ok:true,status:200,statusText:'OK',headers:{},arrayBuffer:()=>new Promise(resolve=>{releaseFirst=()=>resolve(new ArrayBuffer(0))})});
+  if(path==='/second')return Promise.resolve({ok:true});
+  if(path==='/locations')return Promise.resolve({ok:true,json:async()=>({data:[{id:'H1',label_tc:'告士打道'}]})});
+  if(path==='/destinations')return Promise.resolve({ok:true,json:async()=>({data:[{id:'CH',label_tc:'紅磡海底隧道'}]})});
+  throw new Error(`未預期要求：${path}`);
+};
+(async()=>{
+  const first=portalFetch('/first');
+  const second=portalFetch('/second');
+  await Promise.resolve();
+  await Promise.resolve();
+  if(calls.join('|')!=='/first')throw new Error(`裝置收到並行要求：${calls.join('|')}`);
+  releaseFirst();
+  await first;
+  await second;
+  if(calls.join('|')!=='/first|/second')throw new Error(`要求排程不正確：${calls.join('|')}`);
+
+  expandedSlot=3;
+  const locations=loadCatalog(0,'journeyLocations','/locations');
+  const destinations=loadCatalog(0,'journeyDestinations','/destinations');
+  await Promise.all([locations,destinations]);
+  if(catalogState[0].journeyLocations.status!=='loaded'||catalogState[0].journeyDestinations.status!=='loaded')throw new Error('同一小工具的目錄要求互相作廢');
+  process.stdout.write('ok');
+})().catch(error=>{console.error(error.message);process.exit(1)});
+"""
+        completed = subprocess.run(
+            ["node", "-e", script + harness],
             cwd=ROOT,
             text=True,
             capture_output=True,
@@ -73,7 +264,7 @@ const elements={};
 function element(id){return elements[id]||(elements[id]={id,value:'',checked:false,hidden:false,innerHTML:'',textContent:'',disabled:false,selectedOptions:[],setAttribute(name,value){this[name]=value},setCustomValidity(value){this.validationMessage=value},insertAdjacentHTML(){},focus(){}})}
 global.document={getElementById:element,querySelector(){return element('primary')}};
 global.fetch=()=>{throw new Error('搜尋測試不應發出網絡要求')};
-widgetDrafts=Array.from({length:4},()=>emptyWidget());
+widgetDrafts=Array.from({length:widgetSlotCount},()=>emptyWidget());
 widgetDrafts[0].type='bus_eta';
 expandedSlot=1;
 catalogState[0].busRoutes={status:'loaded',items:[{id:'43X',label_tc:'43X'},{id:'96',label_tc:'96'}],error:''};
@@ -86,7 +277,7 @@ input.value='999';
 setBusRouteSearch(0,input);
 if(widgetDrafts[0].bus.route_id!=='999'||widgetDrafts[0].bus.direction_id||widgetDrafts[0].bus.stop_id)throw new Error('缺漏路線沒有保留代號或清除舊站牌');
 if(input['aria-invalid']!=='false'||input.validationMessage)throw new Error('可手動更新的路線被當成格式錯誤');
-if(!element('bus_route_0_help').textContent.includes('更新及省電'))throw new Error('缺漏路線沒有全路線更新提示');
+if(!element('bus_route_0_help').textContent.includes('設定'))throw new Error('缺漏路線沒有全路線更新提示');
 if(validateWidgetDrafts()||firstWidgetValidation?.fieldId!=='bus_direction_0')throw new Error('缺漏路線沒有要求更新後選方向');
 process.stdout.write('ok');
 """
@@ -119,7 +310,7 @@ global.fetch=(path,options)=>{
 (async()=>{
   element('wifi_ssid').value='TransitInk';
   element('weather_location').value='香港天文台';
-  widgetDrafts=Array.from({length:4},()=>emptyWidget());
+  widgetDrafts=Array.from({length:widgetSlotCount},()=>emptyWidget());
   localCatalog.index={schema_version:1,revision:'fixture123',bus:{kmb_lwb:{routes:{}},ctb:{routes:{}}},gmb:{routes:{'69':[{id:'2000410:1',label_tc:'數碼港 往 鰂魚涌',region:'HKI',route_id:'2000410',route_seq:'1',origin_label_tc:'數碼港',destination_label_tc:'鰂魚涌',stop_key:'2000410:1'}]}}};
   localCatalog.rail={schema_version:1,revision:'fixture123',modes:{heavy_rail:[],light_rail:[]}};
   localCatalog.providers.gmb={schema_version:1,revision:'fixture123',routes:{'2000410:1':[{id:'1',label_tc:'數碼港公共運輸交匯處',stop_id:'20003337',stop_seq:'1'}]}};
@@ -201,7 +392,7 @@ global.fetch=async(path,options)=>{
   csrfToken='token';
   localCatalog.index={schema_version:1,revision:'fixture',bus:{kmb_lwb:{routes:{}},ctb:{routes:{}}},gmb:{routes:{}}};
   localCatalog.rail={schema_version:1,revision:'fixture',modes:{heavy_rail:[],light_rail:[]}};
-  widgetDrafts=Array.from({length:4},()=>emptyWidget());
+  widgetDrafts=Array.from({length:widgetSlotCount},()=>emptyWidget());
   widgetDrafts[0].type='bus_eta';widgetDrafts[0].bus.operator='kmb';widgetDrafts[0].bus.route_id='43X';
   widgetDrafts[1].type='gmb_eta';widgetDrafts[1].gmb.route_code='69';
   expandedSlot=3;
@@ -251,7 +442,7 @@ global.fetch=async path=>{
   await new Promise(resolve=>setTimeout(resolve,10));
   if(calls.length!==0||catalogState[0].busRoutes.items[0]?.id!=='1')throw new Error('parent 變更未讀取城巴內建目錄');
 
-  widgetDrafts=Array.from({length:4},()=>emptyWidget());
+  widgetDrafts=Array.from({length:widgetSlotCount},()=>emptyWidget());
   widgetDrafts[2].type='bus_eta';
   element('wifi_ssid').value='TransitInk';
   await saveConfig({preventDefault(){},submitter:element('submit')});
@@ -295,7 +486,7 @@ global.fetch=(path,options)=>{
   element('weather_location').value='香港天文台';
   localCatalog.index={schema_version:1,revision:'fixture123',bus:{kmb_lwb:{routes:{}},ctb:{routes:{}}},gmb:{routes:{}}};
   localCatalog.rail={schema_version:1,revision:'fixture123',modes:{heavy_rail:[],light_rail:[]}};
-  widgetDrafts=Array.from({length:4},()=>emptyWidget());
+  widgetDrafts=Array.from({length:widgetSlotCount},()=>emptyWidget());
   widgetDrafts[2].type='journey_time';
   expandedSlot=2;
   renderWidgetCards();
@@ -311,6 +502,7 @@ global.fetch=(path,options)=>{
   resolveLocations();
   await new Promise(resolve=>setTimeout(resolve,0));
   setJourneyLocation(2,{value:'H1',selectedOptions:[{textContent:'告士打道東行近稅務大樓'}]});
+  await Promise.resolve();
   markup=element('widget_cards').innerHTML;
   if(!markup.includes('正在載入行車方向'))throw new Error('行車方向沒有 Loading 文案');
 
@@ -324,6 +516,114 @@ global.fetch=(path,options)=>{
   if(saved.journey_time?.destination_label_tc!=='紅磡海底隧道')throw new Error('行車方向名稱沒有送出');
   process.stdout.write('ok');
 })().catch(error=>{console.error(error.message);process.exit(1)});
+"""
+        completed = subprocess.run(
+            ["node", "-e", script + harness],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            timeout=10,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(completed.stdout, "ok")
+
+    def test_successful_save_locks_settings_until_the_page_is_reopened(self):
+        source = (ROOT / "src/TransitInkPortalPage.cpp").read_text()
+        script = source.split("<script>", 1)[1].split("</script>", 1)[0]
+        script = script.split("byId('config_form').addEventListener", 1)[0]
+        harness = r"""
+const elements={};
+function element(id){return elements[id]||(elements[id]={id,value:'',checked:false,hidden:false,innerHTML:'',textContent:'',disabled:false,selectedOptions:[],setAttribute(name,value){this[name]=value},insertAdjacentHTML(){},focus(){}})}
+const editableControls=[element('wifi_ssid'),element('ui_locale'),element('catalog_update_button'),element('submit')];
+global.document={
+  getElementById:element,
+  querySelector(){return element('submit')},
+  querySelectorAll(selector){return selector.startsWith('#config_form')?editableControls:[]}
+};
+let saveCalls=0;
+global.fetch=(path)=>{
+  if(path!=='/api/save')throw new Error(`未預期要求：${path}`);
+  saveCalls++;
+  return Promise.resolve({ok:true,text:async()=>'saved'});
+};
+(async()=>{
+  portalLocale='en-GB';
+  element('wifi_ssid').value='TransitInk';
+  element('weather_location').value='Hong Kong Observatory';
+  widgetDrafts=Array.from({length:widgetSlotCount},()=>emptyWidget());
+  await saveConfig({preventDefault(){},submitter:element('submit')});
+  if(saveCalls!==1)throw new Error('第一次儲存沒有送出');
+  if(!settingsLocked||editableControls.some(control=>!control.disabled))throw new Error('成功儲存後仍可修改設定');
+  if(element('config_form')['data-settings-locked']!=='true')throw new Error('表單沒有標記為已鎖定');
+  if(!element('save_status').textContent.includes('reopen the settings page'))throw new Error('沒有提示重新開啟設定頁');
+  await saveConfig({preventDefault(){},submitter:element('submit')});
+  if(saveCalls!==1)throw new Error('鎖定後仍可再次儲存');
+  process.stdout.write('ok');
+})().catch(error=>{console.error(error.message);process.exit(1)});
+"""
+        completed = subprocess.run(
+            ["node", "-e", script + harness],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            timeout=10,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(completed.stdout, "ok")
+
+    def test_transport_labels_follow_locale_and_preserve_both_languages(self):
+        source = (ROOT / "src/TransitInkPortalPage.cpp").read_text()
+        script = source.split("<script>", 1)[1].split("</script>", 1)[0]
+        script = script.split("byId('config_form').addEventListener", 1)[0]
+        harness = r"""
+portalLocale='en-GB';
+if(localizedLabel({label_tc:'中環',label_en:'Central'})!=='Central')throw new Error('英文名稱未被選用');
+if(localizedLabel({label_tc:'馬場',label_en:''})!=='馬場')throw new Error('缺少英文時沒有回退來源語言');
+if(localizedLabel({label_tc:'梨木樹',label_en:'LEI MUK SHUE (CIRCULAR)'})!=='Lei Muk Shue (Circular)')throw new Error('九巴方向英文沒有轉成易讀大小寫');
+if(localizedLabel({label_tc:'大窩口站',label_en:'TAI WO HAU BBI-TAI WO HAU STATION'})!=='Tai Wo Hau BBI-Tai Wo Hau Station')throw new Error('九巴站名英文沒有保留縮寫');
+if(localizedLabel({label_tc:'方向',label_en:'TSUEN WAN WEST STATION to LEI MUK SHUE'})!=='Tsuen Wan West Station to Lei Muk Shue')throw new Error('英文方向連接詞阻止了大小寫整理');
+if(localizedLabel({label_tc:'方向',label_en:'MTR KMB LWB DLR BBI HK NT PHASE III'})!=='MTR KMB LWB DLR BBI HK NT Phase III')throw new Error('交通縮寫沒有保留');
+const labels={};
+setLabelsFromOption(labels,'stop_label',{dataset:{labelTc:'中環碼頭',labelEn:'Central Pier'}});
+if(labels.stop_label_tc!=='中環碼頭'||labels.stop_label_en!=='Central Pier')throw new Error('雙語名稱沒有一併保存');
+const empty=emptyWidget();
+if(!Object.hasOwn(empty.bus,'stop_label_en')||!Object.hasOwn(empty.mtr,'station_label_en'))throw new Error('設定草稿缺少英文欄位');
+const hko=weatherLocations.find(item=>item.label_tc==='香港天文台');
+if(localizedLabel(hko)!=='Hong Kong Observatory')throw new Error('天氣位置沒有使用官方英文名稱');
+const london=weatherLocations.find(item=>item.id==='uk:london');
+if(localizedLabel(london)!=='London'||london.region!=='uk')throw new Error('英國天氣位置沒有分層或英文名稱');
+if(!timeZones.some(item=>item.id==='Europe/London'))throw new Error('缺少英國時區');
+portalLocale='zh-HK';
+if(localizedLabel({label_tc:'中環',label_en:'Central'})!=='中環')throw new Error('繁中名稱未被選用');
+process.stdout.write('ok');
+"""
+        completed = subprocess.run(
+            ["node", "-e", script + harness],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            timeout=10,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(completed.stdout, "ok")
+
+    def test_english_direction_fallback_does_not_show_chinese_connector(self):
+        source = (ROOT / "src/TransitInkPortalPage.cpp").read_text()
+        script = source.split("<script>", 1)[1].split("</script>", 1)[0]
+        script = script.split("byId('config_form').addEventListener", 1)[0]
+        harness = r"""
+portalLocale='en-GB';
+if(localizedField({direction_label_tc:'數碼港 往 鰂魚涌'},'direction_label')!=='數碼港 to 鰂魚涌')throw new Error('已儲存方向仍顯示中文連接詞');
+localCatalog.overrides.set('gmb::69',{directions:[{id:'2000410:1',label_tc:'數碼港 往 鰂魚涌',origin_label_tc:'數碼港',destination_label_tc:'鰂魚涌'}]});
+const gmb=gmbDirectionItems('69')[0];
+if(localizedLabel(gmb)!=='數碼港 to 鰂魚涌'||gmb.label_en.includes('往'))throw new Error('舊小巴快取仍顯示中文連接詞');
+localCatalog.overrides.set('bus:kmb:43X',{directions:[{id:'O:2',service_type:'2',label_tc:'荃灣西站 往 青衣碼頭（服務 2）',origin_label_tc:'荃灣西站',destination_label_tc:'青衣碼頭'}]});
+const bus=busDirectionItems('kmb','43X')[0];
+if(localizedLabel(bus)!=='荃灣西站 to 青衣碼頭 (service 2)'||bus.label_en.includes('往'))throw new Error('舊巴士快取仍顯示中文連接詞');
+localCatalog.overrides.set('bus:tfl:24',{directions:[{id:'inbound:490012280A|490015832E',direction_id:'inbound',service_type:'490012280A|490015832E',label_tc:'Pimlico 往 Hampstead Heath',origin_label_tc:'Pimlico',destination_label_tc:'Hampstead Heath'}]});
+const tfl=busDirectionItems('tfl','24')[0];
+if(localizedLabel(tfl)!=='Pimlico to Hampstead Heath'||tfl.label_en.includes('service')||tfl.label_en.includes('490012280A'))throw new Error('倫敦巴士方向顯示內部服務或站點 ID');
+process.stdout.write('ok');
 """
         completed = subprocess.run(
             ["node", "-e", script + harness],

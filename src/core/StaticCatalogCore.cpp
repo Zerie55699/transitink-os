@@ -16,8 +16,10 @@ bool appendEntry(const TransitCatalogItem& item,
                  std::string& error) {
     const std::string id = item.id == nullptr ? "" : item.id;
     const std::string label = item.labelTc == nullptr ? "" : item.labelTc;
+    const std::string labelEn = item.labelEn == nullptr ? "" : item.labelEn;
     if (id.empty() || id.size() > kMaxStaticCatalogIdBytes || label.empty() ||
-        label.size() > kMaxStaticCatalogLabelBytes) {
+        label.size() > kMaxStaticCatalogLabelBytes ||
+        labelEn.size() > kMaxStaticCatalogLabelBytes) {
         error = "靜態目錄項目格式不正確";
         return false;
     }
@@ -25,7 +27,7 @@ bool appendEntry(const TransitCatalogItem& item,
         error = "靜態目錄項目過多";
         return false;
     }
-    entries.push_back({id, label});
+    entries.push_back({id, label, labelEn});
     return true;
 }
 
@@ -66,7 +68,7 @@ bool listStaticRailLines(RailMode mode,
     parsed.reserve(catalog.groupCount);
     for (std::size_t index = 0; index < catalog.groupCount; ++index) {
         const auto& group = catalog.groups[index];
-        const TransitCatalogItem item{group.id, group.labelTc};
+        const TransitCatalogItem item{group.id, group.labelTc, group.labelEn};
         if (!appendEntry(item, parsed, error)) {
             return false;
         }

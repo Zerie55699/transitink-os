@@ -114,13 +114,13 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertIn('#define FIRMWARE_PRODUCT_NAME "TransitInk OS"', config)
         self.assertIn('#define FIRMWARE_SHORT_NAME "TransitInk"', config)
         self.assertIn("#define CONFIG_AP_PREFIX FIRMWARE_SHORT_NAME", config)
-        self.assertIn('#define FIRMWARE_VERSION "1.0.2"', config)
+        self.assertIn('#define FIRMWARE_VERSION "1.1.0"', config)
         self.assertNotIn("Bus ETA Note 4", config + readme)
         self.assertNotIn("巴士 ETA", config + readme)
         self.assertTrue(readme.startswith("# TransitInk OS"))
         self.assertIn("drawText(18, 42, FIRMWARE_PRODUCT_NAME);", display)
         self.assertIn('#include "ProductConfig.h"', portal)
-        self.assertEqual(2, portal.count("FIRMWARE_PRODUCT_NAME"))
+        self.assertEqual(3, portal.count("FIRMWARE_PRODUCT_NAME"))
         self.assertEqual(1, portal.count("FIRMWARE_SHORT_NAME"))
         self.assertNotIn("<strong>TransitInk</strong>", portal)
         self.assertNotIn(">TransitInk<", portal)
@@ -130,9 +130,17 @@ class ProjectStructureTests(unittest.TestCase):
         main = read_text("src/main.cpp")
         display = read_text("src/EInkDisplay.cpp")
         portal = read_text("src/TransitInkPortalPage.cpp")
+        ui_text = read_text("src/core/UiText.cpp")
         self.assertNotIn('String(FIRMWARE_SHORT_NAME) + " 未同步"', display)
-        self.assertIn('String("密碼：") + configPortal.apPassword()', main)
-        self.assertIn('const String localUrl = "http://" + WiFi.localIP().toString() + "/";', main)
+        self.assertIn("UiTextId::PasswordLabel", main)
+        self.assertIn("UiTextId::ConnectPhoneToWifi", main)
+        self.assertIn('"密碼："', ui_text)
+        self.assertIn('"請先用手機連接以上 Wi-Fi"', ui_text)
+        self.assertIn('"Connect your phone to the Wi-Fi above"', ui_text)
+        self.assertNotIn('const String localUrl = "http://" + WiFi.localIP().toString() + "/";', main)
+        self.assertIn("String displayedConfigUrl = configUrl;", main)
+        self.assertIn("displayedConfigUrl.lastIndexOf('/') + 1", main)
+        self.assertIn('"\\n" + displayedConfigUrl', main)
         self.assertNotIn("再按 Volume 返回主頁", main)
 
         brand_literals = []
@@ -165,25 +173,28 @@ class ProjectStructureTests(unittest.TestCase):
             main,
             "KmbClient kmbClient;",
             "CitybusClient citybusClient;",
+            "TflClient tflClient;",
             "GmbClient gmbClient;",
             "MtrClient mtrClient;",
             "LightRailClient lightRailClient;",
             "JourneyTimeClient journeyTimeClient;",
-            "BusProvider busProvider(kmbClient, citybusClient);",
+            "BusProvider busProvider(kmbClient, citybusClient, tflClient);",
             "GmbProvider gmbProvider(gmbClient);",
             "MtrProvider mtrProvider(mtrClient);",
             "LightRailProvider lightRailProvider(lightRailClient);",
             "JourneyTimeProvider journeyTimeProvider(journeyTimeClient);",
             "WidgetProviderRouter widgetProviderRouter",
             "transitink::WidgetScheduler widgetScheduler(widgetProviderRouter);",
-            "WidgetCatalogService widgetCatalogService(kmbClient, citybusClient, gmbClient);",
+            "WidgetCatalogService widgetCatalogService(kmbClient, citybusClient, gmbClient,",
+            "tflClient);",
             "ConfigPortal configPortal(deviceConfig, configStore, widgetCatalogService);",
         )
         self.assertIn("configTzTime", main)
-        self.assertIn("HKT-8", main)
+        self.assertIn("devicePosixTimeZone(deviceConfig.timeZone)", main)
+        self.assertIn("applyConfiguredTimeZone", main)
         self.assertIn("waitForTimeSync", main)
         self.assertNotIn("正在連接 Wi-Fi", main)
-        self.assertIn("Wi-Fi 未連接", main)
+        self.assertIn("UiTextId::WifiDisconnected", main)
         self.assertIn("configPortal.apPassword()", main)
         self.assertNotIn("EtaController", main)
         self.assertNotIn("nextEtaRefreshMs", main)
@@ -219,6 +230,7 @@ class ProjectStructureTests(unittest.TestCase):
 
         main = read_text("src/main.cpp")
         support = read_text("src/hardware/BoardSupport.cpp")
+        ui_text = read_text("src/core/UiText.cpp")
         self.assertIn("DualButtonHoldDetector", support)
         self.assertIn("kBoardProfile.buttons.configDebounceMs", support)
         self.assertIn("factoryResetUpButtonPressed()", support)
@@ -228,8 +240,10 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertIn("configStore.clear()", main)
         self.assertIn("WiFi.disconnect(true, true)", main)
         self.assertIn("LittleFS.format()", main)
-        self.assertIn("已重設裝置", main)
-        self.assertIn("放開音量鍵後重啟", main)
+        self.assertIn("UiTextId::ResetComplete", main)
+        self.assertIn("UiTextId::ReleaseVolumeRestart", main)
+        self.assertIn("已重設裝置", ui_text)
+        self.assertIn("放開音量鍵後重啟", ui_text)
         self.assertIn("factoryResetPendingRestart", main)
         self.assertIn("ESP.restart()", main)
 
@@ -246,8 +260,19 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertIn("const bool useAccessPoint = WiFi.status() != WL_CONNECTED;", main)
         self.assertIn("configPortal.begin(useAccessPoint)", main)
         self.assertIn("configPortal.pageUrl()", main)
+        self.assertIn("String configAccessPointMessage(const String& configUrl)", main)
+        self.assertIn("einkDisplay.showConfigMode(configApSsid(), message);", main)
+        self.assertIn(
+            "einkDisplay.showConfigMode(\n"
+            "            configApSsid(),\n"
+            "            configAccessPointMessage(configUrl));",
+            main,
+        )
+        self.assertIn("String displayedConfigUrl = configUrl;", main)
+        self.assertIn("displayedConfigUrl.substring(0, accessPathStart)", main)
+        self.assertIn("displayedConfigUrl.substring(accessPathStart)", main)
+
         self.assertIn("configPortal.isApMode()", main)
-        self.assertIn("WiFi.localIP().toString()", main)
         self.assertNotIn("kConfigAccessTimeoutMs", main)
         self.assertNotIn("serviceConfigAccessTimeout", main)
         self.assertNotIn("configAccessStartedAtMs", main)
@@ -258,6 +283,29 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertIn("configAccessMode = false", main)
         self.assertIn("refreshAllWidgetsNow();", main)
         self.assertIn("serviceConfigButton();", main)
+
+    def test_volume_down_click_cycles_configured_widget_pages(self):
+        main = read_text("src/main.cpp")
+        support = read_text("src/hardware/BoardSupport.cpp")
+        header = read_text("include/core/WidgetConfigCore.h")
+        self.assertIn("kWidgetsPerPage = 4", header)
+        self.assertIn("kWidgetPageCount = 3", header)
+        self.assertIn("takeWidgetPageClick()", main)
+        self.assertIn("nextEnabledWidgetPage(deviceConfig.widgets, activeWidgetPage)", main)
+        self.assertIn("widgetScheduler.setActivePage(nextPage, millis())", main)
+        self.assertIn("WIDGET_PAGE_CACHE_TTL_SECONDS", main)
+        self.assertIn("widgetScheduler.pageSwitchSnapshots(", main)
+        self.assertIn("serviceWidgetPageButton();", main)
+        self.assertIn("widgetPageButtonDetector.update(downPressed, upPressed, nowMs)", support)
+        self.assertIn("takeFactoryResetHold()", main)
+
+    def test_loop_task_stack_has_tls_handshake_headroom(self):
+        main = read_text("src/main.cpp")
+        match = re.search(
+            r"SET_LOOP_TASK_STACK_SIZE\(\s*(\d+)\s*\*\s*1024\s*\)", main
+        )
+        self.assertIsNotNone(match)
+        self.assertGreaterEqual(int(match.group(1)), 16)
 
     def test_config_portal_begin_is_idempotent(self):
         header = read_text("include/ConfigPortal.h")
@@ -318,14 +366,17 @@ class ProjectStructureTests(unittest.TestCase):
         main = read_text("src/main.cpp")
         config = read_text("src/AppConfig.cpp")
         display = read_text("src/EInkDisplay.cpp")
+        ui_text = read_text("src/core/UiText.cpp")
         self.assertIn("return areWidgetsValid(config);", config)
         self.assertNotIn("hasEnabledWidgets()", main)
         self.assertNotIn("尚未選擇路線", main)
         self.assertNotIn("no routes configured", main)
         self.assertIn("bool hasEnabledWidget(", display)
         no_widgets = cpp_function_body(display, "void drawNoWidgetsHint()")
-        self.assertIn('"尚未設定小工具"', no_widgets)
-        self.assertIn('"按 Volume Up 開啟設定頁"', no_widgets)
+        self.assertIn("UiTextId::NoWidgets", no_widgets)
+        self.assertIn("UiTextId::OpenSettings", no_widgets)
+        self.assertIn('"尚未設定小工具"', ui_text)
+        self.assertIn('"按 Volume Up 開啟設定頁"', ui_text)
         for signature in (
             "void EInkDisplay::showDashboard(",
             "void EInkDisplay::showSleep(",
@@ -339,6 +390,7 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertIn("showConfigMode(const String& ssid, const String& url, const String& qrUrl = \"\")", header)
 
         display = read_text("src/EInkDisplay.cpp")
+        ui_text = read_text("src/core/UiText.cpp")
         self.assertIn("drawStatusBar", display)
         self.assertIn("drawWifiIcon", display)
         self.assertIn("drawBatteryIcon", display)
@@ -350,24 +402,30 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertIn("status.full", display)
         self.assertIn("drawChargingBolt", display)
         self.assertIn("String batteryStatusText()", display)
-        self.assertIn('"電量："', display)
-        self.assertIn("充電中", display)
+        self.assertIn("UiTextId::BatteryLabel", display)
+        self.assertIn("UiTextId::BatteryCharging", display)
+        self.assertIn('"電量："', ui_text)
+        self.assertIn("充電中", ui_text)
         self.assertIn("FIRMWARE_VERSION", display)
-        self.assertIn('"版本："', display)
-        self.assertRegex(display, r"showConfigMode[\s\S]*drawText\(18, 124, String\(\"版本：\"\) \+ FIRMWARE_VERSION\)")
+        self.assertIn("UiTextId::VersionLabel", display)
+        self.assertIn('"版本："', ui_text)
+        self.assertRegex(display, r"showConfigMode[\s\S]*UiTextId::VersionLabel[\s\S]*FIRMWARE_VERSION")
         self.assertRegex(display, r"showConfigMode[\s\S]*drawText\(18, 100, batteryStatusText\(\)\)")
         self.assertIn("#include <qrcode.h>", display)
         self.assertIn("drawQrCode", display)
         self.assertIn("qrcode_initText", display)
         self.assertIn("qrcode_getModule", display)
-        self.assertIn('String("設定 ") + FIRMWARE_PRODUCT_NAME', display)
-        self.assertIn("網絡：", display)
-        self.assertIn("完成後按「儲存並重啟」", display)
+        self.assertIn("UiTextId::SettingsPrefix", display)
+        self.assertIn("UiTextId::NetworkLabel", display)
+        self.assertIn("UiTextId::SaveAndRestart", display)
+        self.assertIn('"設定 "', ui_text)
+        self.assertIn("網絡：", ui_text)
+        self.assertIn("完成後按「儲存並重啟」", ui_text)
         self.assertNotIn("需要設定", display)
 
         config = read_text("include/ProductConfig.h")
         profile_test = read_text("test_host/test_board_profile.cpp")
-        self.assertIn('#define FIRMWARE_VERSION "1.0.2"', config)
+        self.assertIn('#define FIRMWARE_VERSION "1.1.0"', config)
         self.assertIn("battery.adcPin == 4", profile_test)
         self.assertIn("battery.sensePowerPin == 17", profile_test)
         self.assertIn("battery.chargeDetectPin == 2", profile_test)
@@ -384,19 +442,16 @@ class ProjectStructureTests(unittest.TestCase):
         header = read_text("include/EInkDisplay.h")
         display = read_text("src/EInkDisplay.cpp")
 
-        for api in (
-            "void showDashboard(const transitink::WidgetSnapshotSet& snapshots, const WeatherSnapshot& weather);",
-            "void refreshWidgetLane(uint8_t slot, const transitink::WidgetSnapshotSet& snapshots, const WeatherSnapshot& weather);",
-            "void refreshClock(const transitink::WidgetSnapshotSet& snapshots, const WeatherSnapshot& weather);",
-            "void refreshWeatherFooter(const transitink::WidgetSnapshotSet& snapshots, const WeatherSnapshot& weather);",
-            "void showSleep(const transitink::WidgetSnapshotSet& snapshots, const WeatherSnapshot& weather);",
-        ):
+        self.assertEqual(header.count("transitink::WidgetPageSnapshotSet& snapshots"), 6)
+        for api in ("showDashboard", "refreshWidgetLane", "refreshClock",
+                    "refreshWeatherFooter", "showSleep",
+                    "refreshSleepStatusAndWeather"):
             self.assertIn(api, header)
         self.assertNotIn("EtaController", header)
         self.assertNotIn("TRANSITINK_LEGACY_COMPAT", header)
 
         self.assertIn("constexpr DisplayRegion kStatusRegion{0, 0, EINK_WIDTH, 42};", display)
-        self.assertIn("constexpr DisplayRegion kLaneRegions[transitink::kWidgetSlotCount]", display)
+        self.assertIn("constexpr DisplayRegion kLaneRegions[transitink::kWidgetsPerPage]", display)
         for rectangle in (
             "{0, 42, EINK_WIDTH, 57}",
             "{0, 99, EINK_WIDTH, 57}",
@@ -406,7 +461,7 @@ class ProjectStructureTests(unittest.TestCase):
             self.assertIn(rectangle, display)
         self.assertIn("constexpr DisplayRegion kFooterRegion{0, 270, EINK_WIDTH, 30};", display)
         self.assertIn("kLaneRegions[slot]", display)
-        self.assertIn("static_assert(transitink::kWidgetSlotCount == 4", display)
+        self.assertIn("static_assert(transitink::kWidgetsPerPage == 4", display)
         self.assertIn("constexpr bool regionFitsPanel(const DisplayRegion& region)", display)
         for bound in (
             "region.x >= 0",
@@ -424,7 +479,7 @@ class ProjectStructureTests(unittest.TestCase):
             self,
             dashboard,
             "canvas.clear();",
-            "drawClockAndStatusBar();",
+            "drawClockAndStatusBar(widgetPageIndex_, widgetPageCount_);",
             "shouldDrawLaneDivider(snapshots, slot)",
             "drawWidgetLane(slot, snapshots[slot], false, drawDivider);",
             "drawWeatherFooter(weather);",
@@ -436,7 +491,7 @@ class ProjectStructureTests(unittest.TestCase):
         assert_fragments_in_order(
             self,
             lane,
-            "if (slot >= transitink::kWidgetSlotCount)",
+            "if (slot >= transitink::kWidgetsPerPage)",
             "return;",
             "if (!dashboardFrameActive || !previousFrameValid)",
             "showDashboard(snapshots, weather);",
@@ -450,7 +505,7 @@ class ProjectStructureTests(unittest.TestCase):
 
         clock = cpp_function_body(
             display,
-            "void EInkDisplay::refreshClock(const transitink::WidgetSnapshotSet&",
+            "void EInkDisplay::refreshClock(const transitink::WidgetPageSnapshotSet&",
         )
         assert_fragments_in_order(
             self,
@@ -460,7 +515,7 @@ class ProjectStructureTests(unittest.TestCase):
             "return;",
             "std::memcpy(frameBuffer, previousFrameBuffer, sizeof(frameBuffer));",
             "clearRegion(kStatusRegion);",
-            "drawClockAndStatusBar();",
+            "drawClockAndStatusBar(widgetPageIndex_, widgetPageCount_);",
             "partialRefresh(kStatusRegion.x, kStatusRegion.y, kStatusRegion.w, kStatusRegion.h);",
         )
 
@@ -479,13 +534,13 @@ class ProjectStructureTests(unittest.TestCase):
 
         sleep = cpp_function_body(
             display,
-            "void EInkDisplay::showSleep(const transitink::WidgetSnapshotSet&",
+            "void EInkDisplay::showSleep(const transitink::WidgetPageSnapshotSet&",
         )
         assert_fragments_in_order(
             self,
             sleep,
             "canvas.clear();",
-            "drawClockAndStatusBar();",
+            "drawClockAndStatusBar(widgetPageIndex_, widgetPageCount_);",
             "shouldDrawLaneDivider(snapshots, slot)",
             "drawWidgetLane(slot, snapshots[slot], true, drawDivider);",
             "drawWeatherFooter(weather);",
@@ -494,8 +549,8 @@ class ProjectStructureTests(unittest.TestCase):
         )
 
         self.assertIn('"%02d/%02d %s %02d:%02d"', display)
-        self.assertIn('"星期日", "星期一", "星期二", "星期三",', display)
-        self.assertIn('"星期四", "星期五", "星期六"', display)
+        self.assertIn("transitink::weekdayText(tmInfo.tm_wday)", display)
+        self.assertIn("WeekdaySunday", read_text("include/core/UiText.h"))
         self.assertIn("String currentClockText()", display)
         self.assertIn("drawText(12, 24, currentClockText())", display)
         self.assertIn("panel.showPartialRegion(frameBuffer, previousFrameBuffer, x, y, w, h)", display)
@@ -524,21 +579,27 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertIn("snapshot.state == transitink::WidgetState::Error", lane)
         self.assertIn("snapshot.providerMessage", lane)
         self.assertIn("snapshot.freshness == transitink::Freshness::Stale", lane)
-        self.assertIn('"資料已逾期"', lane)
-        self.assertIn('"暫未能取得資料"', lane)
+        self.assertIn("UiTextId::DataExpired", lane)
+        self.assertIn("UiTextId::DataUnavailable", lane)
         self.assertIn("snapshot.type == transitink::WidgetType::JourneyTime ? 1U : 2U", lane)
         self.assertIn("std::min(snapshot.valueCount, valueLimit)", lane)
         shown_values = lane.index("const std::size_t shownValueCount")
         stale_empty = lane.index("snapshot.freshness == transitink::Freshness::Stale")
-        self.assertLess(lane.index('"暫未能取得資料"', stale_empty), shown_values)
+        self.assertLess(lane.index("UiTextId::DataUnavailable", stale_empty), shown_values)
         fresh_empty_error = lane.index("snapshot.freshness == transitink::Freshness::Fresh")
         self.assertLess(lane.index("snapshot.providerMessage", fresh_empty_error), shown_values)
         self.assertLess(lane.index("return;", fresh_empty_error), shown_values)
         self.assertIn("snapshot.values[valueIndex].text", lane)
         self.assertIn("snapshot.type == transitink::WidgetType::JourneyTime", lane)
         self.assertIn("snapshot.values[valueIndex].context", lane)
-        self.assertGreater(lane.index('"資料已逾期"'), shown_values)
-        self.assertIn('drawText(valueX, valueY, "-")', lane)
+        self.assertGreater(lane.index("UiTextId::DataExpired"), shown_values)
+        self.assertIn("adaptiveLaneTextWidth", lane)
+        self.assertIn("compactLaneTitle", lane)
+        self.assertIn("drawRightAlignedTruncatedText", lane)
+        self.assertIn(
+            "kLaneRightEdge - kLaneValueAreaX",
+            lane,
+        )
 
     def test_display_truncates_utf8_by_measured_codepoints_and_uses_transitink_branding(self):
         display = read_text("src/EInkDisplay.cpp")
@@ -549,19 +610,24 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertIn("int measureTextWidth(const String& text)", display)
         self.assertIn("void drawTruncatedText(int x, int y, const String& text, int maxWidth)", display)
         self.assertRegex(display, r"measureTextWidth[\s\S]*decodeUtf8Codepoint[\s\S]*findHkGlyph")
+        plan_body = cpp_function_body(
+            display, "transitink::DisplayTextPlan displayTextPlan("
+        )
+        self.assertIn("transitink::planTruncatedUtf8", plan_body)
         truncated_body = cpp_function_body(display, "void drawTruncatedText(")
-        self.assertIn("transitink::planTruncatedUtf8", truncated_body)
+        self.assertIn("displayTextPlan(text, maxWidth)", truncated_body)
         self.assertIn("drawText(x, y, String(plan.text.c_str()))", truncated_body)
         self.assertNotIn("substring(", truncated_body)
         self.assertIn("using CodepointWidth", core_header)
         self.assertIn("struct DisplayTextPlan", core_header)
+        self.assertIn("withoutTrailingParentheticalQualifier", core_header)
         self.assertIn('"…"', core)
         for suffix in ('"..."', '".."', '"."', '""'):
             self.assertIn(suffix, core)
         self.assertIn("output.reserve", core)
         self.assertNotIn("std::function", core_header + core)
         self.assertIn("drawText(18, 42, FIRMWARE_PRODUCT_NAME)", display)
-        self.assertIn('drawText(18, 38, String("設定 ") + FIRMWARE_PRODUCT_NAME)', display)
+        self.assertRegex(display, r"drawText\([\s\S]*UiTextId::SettingsPrefix[\s\S]*FIRMWARE_PRODUCT_NAME")
         self.assertNotIn('"設定 TransitInk"', display)
         self.assertNotIn("TRANSITINK_LEGACY_COMPAT", display)
 
@@ -576,17 +642,17 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertIn('Serial.println("EPD partial promoted to full: large diff")', display)
         self.assertRegex(display, r"refreshCanvasPartially[\s\S]*stats\.changedBits == 0[\s\S]*return;[\s\S]*stats\.ratio\(\) >= kForceFullPartialDiffRatio[\s\S]*flushCanvas\(\);[\s\S]*return;[\s\S]*panel\.showPartialRegion")
 
-    def test_widget_refresh_helpers_force_all_and_service_only_one_due_slot(self):
+    def test_widget_refresh_helpers_force_active_page_and_service_only_one_due_slot(self):
         main = read_text("src/main.cpp")
         all_body = cpp_function_body(main, "void refreshAllWidgetsNow()")
         assert_fragments_in_order(
             self,
             all_body,
-            "widgetScheduler.forceAllDue(nowMs);",
-            "attempts < transitink::kWidgetSlotCount",
+            "widgetScheduler.forceActivePageDue(nowMs);",
+            "attempts < transitink::kWidgetsPerPage",
             "widgetScheduler.hasPendingDue(nowMs)",
             "widgetScheduler.serviceNextDue(nowMs, nowEpoch);",
-            "einkDisplay.showDashboard(currentDisplaySnapshots(), weatherSnapshot);",
+            "einkDisplay.showDashboard(currentDisplaySnapshots(), weatherSnapshot,",
         )
         self.assertEqual(1, all_body.count("serviceNextDue("))
         one_body = cpp_function_body(main, "void serviceOneWidgetIfDue()")
@@ -596,7 +662,7 @@ class ProjectStructureTests(unittest.TestCase):
             one_body,
             "const transitink::WidgetTickResult tick = widgetScheduler.serviceNextDue",
             "if (!tick.ran)",
-            "einkDisplay.refreshWidgetLane(tick.slot, currentDisplaySnapshots(), weatherSnapshot);",
+            "einkDisplay.refreshWidgetLane(lane, currentDisplaySnapshots(), weatherSnapshot);",
         )
 
     def test_clock_refreshes_on_minute_boundary_independent_of_eta(self):
@@ -614,9 +680,9 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertNotIn("EtaController", header)
         self.assertIn("constexpr DisplayRegion kStatusRegion{0, 0, EINK_WIDTH, 42};", display)
         self.assertIn("clearRegion(kStatusRegion);", display)
-        self.assertIn("drawClockAndStatusBar()", display)
+        self.assertIn("drawClockAndStatusBar(uint8_t pageIndex", display)
         self.assertIn("partialRefresh(kStatusRegion.x, kStatusRegion.y, kStatusRegion.w, kStatusRegion.h)", display)
-        self.assertRegex(display, r"drawClockAndStatusBar\(\)[\s\S]*drawStatusBar\(\);[\s\S]*drawText\(12, 24, currentClockText\(\)\);")
+        self.assertRegex(display, r"drawClockAndStatusBar\(uint8_t pageIndex[\s\S]*drawStatusBar\(\);[\s\S]*drawText\(12, 24, currentClockText\(\)\);")
         self.assertNotIn("showEta", main)
         self.assertRegex(main, r"loop\(\)[\s\S]*serviceOneWidgetIfDue\(\);")
         self.assertRegex(main, r"loop\(\)[\s\S]*millis\(\) >= nextClockRefreshMs[\s\S]*refreshClockNow\(\);")
@@ -640,11 +706,19 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertIn("findHkGlyph", glyph_lookup)
         self.assertNotIn("kHkGlyphs[]", glyph_lookup)
 
-    def test_transitink_portal_has_three_tabs_and_four_accessible_widget_cards(self):
+    def test_transitink_portal_has_three_tabs_and_three_accessible_widget_pages(self):
         page = read_text("src/TransitInkPortalPage.cpp")
-        for label in ("Wi-Fi", "主頁小工具", "更新及省電"):
+        for label in ("Wi-Fi", "主頁小工具", "設定"):
             self.assertIn(label, page)
-        self.assertIn("label_tc:'港鐵'", page)
+        header = page.split("</header>", 1)[0]
+        settings_panel = page.split('id="panel_power"', 1)[1].split("</section>", 1)[0]
+        self.assertNotIn('id="ui_locale"', header)
+        self.assertIn('id="ui_locale"', settings_panel)
+        self.assertIn('value="zh-HK"', settings_panel)
+        self.assertIn('value="en-GB"', settings_panel)
+        self.assertIn('data-i18n="settings">設定</button>', page)
+        self.assertIn("interface_language:'Interface language'", page)
+        self.assertIn("label_tc:t('mtr')", page)
         self.assertNotIn("港鐵重鐵", page)
         self.assertIn('role="tablist"', page)
         self.assertIn('role="tab"', page)
@@ -652,7 +726,11 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertIn('aria-expanded', page)
         self.assertIn('aria-live="polite"', page)
         self.assertIn(":focus-visible", page)
-        self.assertIn("Array.from({length:4}", page)
+        self.assertIn("const widgetPageCount=3", page)
+        self.assertIn("const widgetsPerPage=4", page)
+        self.assertIn("const widgetSlotCount=widgetsPerPage*widgetPageCount", page)
+        self.assertIn('id="widget_page_tabs"', page)
+        self.assertIn("function selectWidgetPage", page)
         self.assertIn("let expandedSlot=0", page)
         for function in (
             "selectTab", "expandWidgetCard", "renderWidgetCards",
@@ -660,6 +738,22 @@ class ProjectStructureTests(unittest.TestCase):
             "validateWidgetDrafts", "collectConfig",
         ):
             self.assertIn(f"function {function}", page)
+
+    def test_transitink_portal_mobile_layout_wraps_long_english_content(self):
+        page = read_text("src/TransitInkPortalPage.cpp")
+        mobile = page.split("@media(max-width:640px)", 1)[1].split(
+            "@media(prefers-color-scheme", 1
+        )[0]
+        self.assertIn(
+            ".wifi-actions,.catalog-actions{align-items:stretch;flex-direction:column}",
+            mobile,
+        )
+        self.assertIn("grid-template-columns:minmax(0,1fr)", mobile)
+        self.assertIn(".order-actions{justify-content:flex-start;flex-wrap:wrap}", mobile)
+        self.assertIn("input,select{width:100%;min-width:0;max-width:100%", page)
+        self.assertIn(".action-inner>*{min-width:0}", page)
+        self.assertIn("overflow-wrap:anywhere", page)
+        self.assertNotIn("overflow-x:hidden", page)
 
     def test_widget_editor_stages_catalogs_clears_dependents_and_guards_stale_requests(self):
         page = read_text("src/TransitInkPortalPage.cpp")
@@ -676,10 +770,16 @@ class ProjectStructureTests(unittest.TestCase):
             "/api/catalog/bus/routes", "/api/catalog/bus/directions",
             "/api/catalog/bus/stops", "/api/catalog/gmb/routes",
             "/api/catalog/gmb/directions", "/api/catalog/gmb/stops",
-            "/api/catalog/rail/lines", "/api/catalog/rail/stations",
-            "/api/catalog/rail/directions",
         ):
             self.assertNotIn(online_catalog, page)
+        self.assertIn("index.bus?.tfl?.routes", page)
+        self.assertIn("rail.modes?.london_rail", page)
+        self.assertNotIn(
+            "/api/catalog/rail/lines?mode=london_rail", page)
+        self.assertNotIn(
+            "/api/catalog/rail/stations?mode=london_rail", page)
+        self.assertNotIn(
+            "/api/catalog/rail/directions?mode=london_rail", page)
         self.assertIn("requestVersion[slot]", page)
         self.assertIn("if(token!==requestVersion[slot])return", page)
         self.assertIn("clearBusAfterOperator", page)
@@ -698,7 +798,7 @@ class ProjectStructureTests(unittest.TestCase):
     def test_portal_is_password_safe_and_has_one_save_action(self):
         page = read_text("src/TransitInkPortalPage.cpp")
         codec = read_text("src/PortalConfigCodec.cpp")
-        self.assertEqual(page.count("儲存並重新啟動"), 1)
+        self.assertEqual(page.count('button class="primary" type="submit"'), 1)
         self.assertIn("留空會保留目前已儲存的密碼", page)
         self.assertIn("wifi_password_set", codec)
         self.assertNotIn('doc["wifi_password"] = config.wifiPassword', codec)
@@ -734,10 +834,15 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertIn('doc["weather_location_tc"] = config.weatherLocationTc', config_impl)
 
         page = read_text("src/TransitInkPortalPage.cpp")
+        self.assertIn('id="weather_region"', page)
         self.assertIn('id="weather_location"', page)
+        self.assertIn("weatherRegions", page)
+        self.assertIn("weatherRegionForLocation", page)
+        self.assertIn("setWeatherRegion", page)
         self.assertIn("renderWeatherLocationOptions", page)
-        self.assertIn("renderWeatherLocationOptions(cfg.weather_location_tc", page)
+        self.assertIn("renderWeatherRegionOptions(weatherRegion)", page)
         self.assertIn("weather_location_tc:byId('weather_location').value", page)
+        self.assertIn("weatherLocations.filter(item=>item.region===activeRegion)", page)
         self.assertIn("天氣位置", page)
 
         weather_header = read_text("include/WeatherClient.h")
@@ -746,10 +851,29 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertIn("String weatherDisplayText", weather_header)
 
         weather_client = read_text("src/WeatherClient.cpp")
-        self.assertIn("data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=rhrread&lang=tc", weather_client)
+        self.assertIn("data.weather.gov.hk/weatherAPI/opendata/weather.php", weather_client)
+        self.assertIn('(useEnglish ? "en" : "tc")', weather_client)
+        self.assertIn("Hong Kong Observatory", weather_client)
         self.assertIn('item["place"]', weather_client)
         self.assertIn('item["value"]', weather_client)
         self.assertIn("weatherConditionText", weather_client)
+        self.assertIn("api.open-meteo.com/v1/forecast", weather_client)
+        self.assertIn("openMeteoWeatherConditionText", weather_client)
+        self.assertIn('normalizedTc.startsWith("uk:")', weather_client)
+        self.assertIn("configureOpenMeteoVerifiedTls", weather_client)
+
+        time_zone_header = read_text("include/core/TimeZoneCore.h")
+        time_zone_core = read_text("src/core/TimeZoneCore.cpp")
+        self.assertIn("enum class DeviceTimeZone", time_zone_header)
+        self.assertIn('"Asia/Hong_Kong"', time_zone_core)
+        self.assertIn('"Europe/London"', time_zone_core)
+        self.assertIn('"GMT0BST,M3.5.0/1,M10.5.0/2"', time_zone_core)
+
+        self.assertIn('id="time_zone"', page)
+        self.assertIn("renderTimeZoneOptions", page)
+        self.assertIn("time_zone:byId('time_zone').value", page)
+        self.assertIn("uk:london", page)
+        self.assertIn("Open-Meteo", page)
 
         display_header = read_text("include/EInkDisplay.h")
         self.assertIn('#include "WeatherClient.h"', display_header)
@@ -829,11 +953,16 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertIn("scheduled_wake_start_minutes:timeToMinutes(byId('scheduled_wake_start').value)", page)
         self.assertIn("scheduled_wake_end_minutes:timeToMinutes(byId('scheduled_wake_end').value)", page)
         for cadence in (
-            "<span>港鐵 ETA</span><strong>每 30 秒</strong>",
-            "<span>巴士 ETA</span><strong>每 60 秒</strong>",
-            "<span>行車時間</span><strong>每 120 秒</strong>",
+            '<span data-i18n="hk_rail_eta">香港鐵路 ETA</span><strong data-i18n="every_30_seconds">每 30 秒</strong>',
+            '<span data-i18n="hk_bus_eta">香港巴士 ETA</span><strong data-i18n="every_60_seconds">每 60 秒</strong>',
+            '<span data-i18n="london_bus_eta">倫敦巴士 ETA</span><strong data-i18n="every_30_seconds">每 30 秒</strong>',
+            '<span data-i18n="journey_time">行車時間</span><strong data-i18n="every_120_seconds">每 120 秒</strong>',
         ):
             self.assertIn(cadence, page)
+        self.assertIn("rail_eta:'鐵路 ETA'", page)
+        self.assertIn("rail_eta:'Rail ETA'", page)
+        self.assertIn("mtr_eta:t('rail_eta')", page)
+        self.assertIn("value=\"mtr_eta\"", page)
 
     def test_sleep_state_uses_light_sleep_gpio0_home_wake_and_stops_network_services(self):
         main = read_text("src/main.cpp")
@@ -917,7 +1046,8 @@ class ProjectStructureTests(unittest.TestCase):
             maintenance,
             "syncTimeAndWeatherBeforeDashboard(false);",
             "stopNetworkForSleep();",
-            "einkDisplay.refreshSleepStatusAndWeather(currentDisplaySnapshots(), weatherSnapshot);",
+            "einkDisplay.refreshSleepStatusAndWeather(",
+            "currentDisplaySnapshots(), weatherSnapshot, activeWidgetPage,",
             "einkDisplay.prepareForSleep();",
         )
         self.assertNotIn("widgetScheduler", maintenance)
@@ -938,10 +1068,10 @@ class ProjectStructureTests(unittest.TestCase):
     def test_sleep_screen_removes_stale_eta_minutes_without_bottom_right_icons(self):
         header = read_text("include/EInkDisplay.h")
         self.assertIn("void begin(bool showBootScreen = true);", header)
-        self.assertIn("void showSleep(const transitink::WidgetSnapshotSet& snapshots, const WeatherSnapshot& weather);", header)
+        self.assertIn("void showSleep(const transitink::WidgetPageSnapshotSet& snapshots,", header)
         self.assertNotIn("void showSleep(const DeviceConfig& config, const WeatherSnapshot& weather);", header)
         self.assertIn(
-            "void refreshSleepStatusAndWeather(const transitink::WidgetSnapshotSet& snapshots, const WeatherSnapshot& weather);",
+            "void refreshSleepStatusAndWeather(",
             header,
         )
         self.assertIn("void prepareForSleep();", header)
@@ -953,12 +1083,16 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertNotIn('drawText(x + 2, y + 8, "Z")', display)
         self.assertNotIn("canvas.fillCircle(x + 32, y + 34, 18, kColorBlack)", display)
         self.assertIn("void drawWidgetLane(uint8_t slot, const transitink::WidgetSnapshot& snapshot, bool sleeping, bool drawDivider)", display)
-        self.assertIn('drawText(valueX, valueY, "-")', display)
+        self.assertIn(
+            'drawRightAlignedTruncatedText(\n'
+            '                valueRight, valueY, "-", kLaneValueWidth);',
+            display,
+        )
         self.assertNotIn("休眠中", display)
         self.assertIn("EInkDisplay::showSleep", display)
         snapshot_sleep_body = cpp_function_body(
             display,
-            "void EInkDisplay::showSleep(const transitink::WidgetSnapshotSet&",
+            "void EInkDisplay::showSleep(const transitink::WidgetPageSnapshotSet&",
         )
         assert_fragments_in_order(
             self,
@@ -975,10 +1109,10 @@ class ProjectStructureTests(unittest.TestCase):
             self,
             sleep_status_body,
             "if (!previousFrameValid)",
-            "showSleep(snapshots, weather);",
+            "showSleep(snapshots, weather, widgetPageIndex_, widgetPageCount_);",
             "std::memcpy(frameBuffer, previousFrameBuffer, sizeof(frameBuffer));",
             "clearRegion(kStatusRegion);",
-            "drawClockAndStatusBar();",
+            "drawClockAndStatusBar(widgetPageIndex_, widgetPageCount_);",
             "clearRegion(kFooterRegion);",
             "drawWeatherFooter(weather);",
             "partialRefresh(kStatusRegion.x, kStatusRegion.y, kStatusRegion.w, kStatusRegion.h);",
@@ -991,7 +1125,7 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertNotIn("EInkDisplay::showEta", display)
         self.assertNotRegex(display, r"showEta[\s\S]*drawAwakeCatIcon")
         self.assertNotRegex(display, r"showSleep[\s\S]*drawSleepCatIcon")
-        self.assertRegex(display, r"EInkDisplay::begin\(bool showBootScreen\)[\s\S]*if \(showBootScreen\) \{[\s\S]*showBoot\(\"啟動中\"\);")
+        self.assertRegex(display, r"EInkDisplay::begin\(bool showBootScreen\)[\s\S]*if \(showBootScreen\) \{[\s\S]*UiTextId::Booting")
 
         main = read_text("src/main.cpp")
         self.assertIn("const bool rtcResetWake = consumeSleepResumeMarker()", main)
@@ -1022,15 +1156,15 @@ class ProjectStructureTests(unittest.TestCase):
         assert_fragments_in_order(
             self,
             wake_refresh,
-            "widgetScheduler.forceAllDue(wakeStartedAtMs);",
-            "einkDisplay.showDashboard(homeWakeLoadingSnapshots(), weatherSnapshot);",
+            "widgetScheduler.forceActivePageDue(wakeStartedAtMs);",
+            "einkDisplay.showDashboard(homeWakeLoadingSnapshots(), weatherSnapshot,",
             "WiFi.begin(deviceConfig.wifiSsid.c_str(), deviceConfig.wifiPassword.c_str());",
         )
         self.assertNotIn("connectWifi", wake_refresh)
         self.assertNotIn("refreshWeatherNow", wake_refresh)
         loading_snapshots = cpp_function_body(
             main,
-            "transitink::WidgetSnapshotSet homeWakeLoadingSnapshots()",
+            "transitink::WidgetPageSnapshotSet homeWakeLoadingSnapshots()",
         )
         assert_fragments_in_order(
             self,
@@ -1038,7 +1172,7 @@ class ProjectStructureTests(unittest.TestCase):
             "snapshot.values = {};",
             "snapshot.valueCount = 0;",
             "snapshot.state = transitink::WidgetState::Empty;",
-            'snapshot.providerMessage = "正在更新...";',
+            "UiTextId::Updating",
             "snapshot.fetchedAtEpoch = 0;",
             "snapshot.freshness = transitink::Freshness::Fresh;",
         )
@@ -1050,7 +1184,7 @@ class ProjectStructureTests(unittest.TestCase):
             "HomeWakeRefreshPhase::WaitingForTime",
             "refreshClockNow();",
             "HomeWakeRefreshPhase::Widgets",
-            "homeWakeWidgetAttempts < static_cast<uint8_t>(transitink::kWidgetSlotCount)",
+            "homeWakeWidgetAttempts < static_cast<uint8_t>(transitink::kWidgetsPerPage)",
             "serviceOneWidgetIfDue();",
             "HomeWakeRefreshPhase::Weather",
             "refreshWeatherNow();",
@@ -1124,6 +1258,8 @@ class ProjectStructureTests(unittest.TestCase):
         light_client = read_text("src/LightRailClient.cpp")
         mtr_provider = read_text("src/providers/MtrProvider.cpp")
         light_provider = read_text("src/providers/LightRailProvider.cpp")
+        tfl_provider = read_text("src/providers/TflRailProvider.cpp")
+        tfl_client = read_text("src/TflClient.cpp")
         parser = read_text("src/TransitJsonParsers.cpp")
         catalog = read_text("src/TransitCatalog.cpp")
         native = read_text("platformio.native.ini")
@@ -1143,9 +1279,15 @@ class ProjectStructureTests(unittest.TestCase):
                         light_client.index("WiFiClientSecure tls"))
         self.assertIn("RailMode::HeavyRail", mtr_provider)
         self.assertIn("RailMode::LightRail", light_provider)
+        self.assertIn("RailMode::LondonRail", tfl_provider)
         self.assertIn("normalizeRailSnapshot", mtr_provider)
         self.assertIn("normalizeRailSnapshot", light_provider)
+        self.assertIn("normalizeRailSnapshot", tfl_provider)
+        self.assertIn("fetchRailLines", tfl_client)
+        self.assertIn("fetchFilteredRailStations", tfl_client)
+        self.assertIn("fetchRailArrivals", tfl_client)
         self.assertIn("lightRailDirectionIdForDestination", parser)
+        self.assertIn("parseTflRailArrivalsJson", parser)
         self.assertNotIn("config.directionLabelTc", parser)
         self.assertNotIn("HTTPClient", catalog)
         self.assertIn("[env:native_app_config]", native)

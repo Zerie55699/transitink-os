@@ -15,6 +15,7 @@ constexpr std::size_t kMaxStaticCatalogLabelBytes = 192;
 struct StaticCatalogEntry {
     std::string id;
     std::string labelTc;
+    std::string labelEn{};
 };
 
 bool listStaticRailLines(RailMode mode,

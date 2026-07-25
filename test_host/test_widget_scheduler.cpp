@@ -152,6 +152,87 @@ int main() {
         FakeRouter router;
         WidgetSlots configs{};
         configs[0] = configFor(WidgetType::BusEta);
+        configs[4] = configFor(WidgetType::BusEta);
+        router.scripted[0] = {ready(0, WidgetType::BusEta, 1000, 1300, "第一頁")};
+        router.scripted[4] = {ready(4, WidgetType::BusEta, 1000, 1300, "第二頁")};
+
+        WidgetScheduler scheduler(router);
+        scheduler.configure(configs, 10);
+        assert(scheduler.activePage() == 0);
+        assert(scheduler.serviceNextDue(10, 1000).slot == 0);
+        assert(!scheduler.serviceNextDue(10, 1000).ran);
+        assert((router.calls == std::vector<uint8_t>{0}));
+
+        assert(scheduler.setActivePage(1, 20));
+        assert(scheduler.activePage() == 1);
+        const auto secondPage = scheduler.serviceNextDue(20, 1000);
+        assert(secondPage.ran && secondPage.slot == 4);
+        assert((router.calls == std::vector<uint8_t>{0, 4}));
+        assert(!scheduler.setActivePage(2, 30));
+
+        const auto display = snapshotsForWidgetPage(scheduler.displaySnapshots(1000), 1);
+        assert(display[0].slot == 0);
+        assert(display[0].values[0].text == "第二頁");
+    }
+
+    {
+        FakeRouter router;
+        WidgetSlots configs{};
+        configs[4] = configFor(WidgetType::BusEta);
+        configs[5] = configFor(WidgetType::BusEta);
+        router.scripted[4] = {
+            ready(4, WidgetType::BusEta, 1000, 1050, "即將過期"),
+        };
+        router.scripted[5] = {
+            outcome(ProviderOutcome::Empty, 5, WidgetType::BusEta),
+        };
+
+        WidgetScheduler scheduler(router);
+        scheduler.configure(configs, 10);
+        assert(scheduler.setActivePage(1, 20));
+
+        const auto neverLoaded =
+            scheduler.pageSwitchSnapshots(1000, 180);
+        assert(neverLoaded[0].providerMessage == "載入中");
+        assert(neverLoaded[1].providerMessage == "載入中");
+
+        scheduler.serviceNextDue(20, 1000);
+        scheduler.serviceNextDue(20, 1000);
+        const auto recent = scheduler.pageSwitchSnapshots(1010, 180);
+        assert(recent[0].valueCount == 1);
+        assert(recent[0].values[0].text == "即將過期");
+        assert(recent[1].state == WidgetState::Empty);
+        assert(recent[1].providerMessage == "暫無班次");
+
+        const auto elapsedArrival =
+            scheduler.pageSwitchSnapshots(1060, 180);
+        assert(elapsedArrival[0].valueCount == 0);
+        assert(elapsedArrival[0].providerMessage == "載入中");
+        assert(elapsedArrival[1].providerMessage == "暫無班次");
+
+        const auto expiredCache =
+            scheduler.pageSwitchSnapshots(1180, 180);
+        assert(expiredCache[0].providerMessage == "載入中");
+        assert(expiredCache[1].providerMessage == "載入中");
+    }
+
+    {
+        FakeRouter router;
+        WidgetSlots configs{};
+        configs[8] = configFor(WidgetType::JourneyTime);
+        router.scripted[8] = {
+            ready(8, WidgetType::JourneyTime, 1000, 0, "第三頁"),
+        };
+        WidgetScheduler scheduler(router);
+        scheduler.configure(configs, 5);
+        assert(scheduler.activePage() == 2);
+        assert(scheduler.serviceNextDue(5, 1000).slot == 8);
+    }
+
+    {
+        FakeRouter router;
+        WidgetSlots configs{};
+        configs[0] = configFor(WidgetType::BusEta);
         router.scripted[0] = {
             ready(0, WidgetType::BusEta, 1000, 2000, "原有班次"),
             outcome(ProviderOutcome::Failure, 0, WidgetType::BusEta),
@@ -191,6 +272,9 @@ int main() {
         FakeRouter router;
         WidgetSlots configs{};
         configs[0] = configFor(WidgetType::BusEta);
+        configs[0].bus.routeLabelTc = "11";
+        configs[0].bus.destinationLabelTc = "中環";
+        configs[0].bus.stopLabelTc = "海壩村";
         configs[1] = configFor(WidgetType::BusEta);
         router.scripted[0] = {
             outcome(ProviderOutcome::Failure, 0, WidgetType::BusEta),
@@ -205,6 +289,8 @@ int main() {
         assert(scheduler.snapshot(0).state == WidgetState::Error);
         assert(scheduler.snapshot(0).providerMessage == "暫未能取得資料");
         assert(scheduler.snapshot(0).valueCount == 0);
+        assert(scheduler.snapshot(0).title == "11 · 中環");
+        assert(scheduler.snapshot(0).subtitle == "海壩村");
         assert(scheduler.snapshot(1).valueCount == 0);
         scheduler.serviceNextDue(10, 1000);
         assert(scheduler.snapshot(1).values[0].text == "第二格");

@@ -22,6 +22,7 @@ constexpr const char* kUpdatedRouteIndexPath = "/catalog_route_index.json";
 constexpr const char* kGmbRoutesCachePath = "/gmb_routes.json";
 constexpr const char* kKmbRouteListCachePath = "/ui_kmb_routes.json";
 constexpr const char* kCitybusRouteListCachePath = "/ui_ctb_routes.json";
+constexpr const char* kTflRailLinesCachePath = "/tfl_rail_lines.json";
 
 struct CachePaths {
     const char* data;
@@ -127,6 +128,10 @@ String gmbOverrideCachePath(const String& routeCode) {
     return String("/catalog_gmb_") + routeCode + ".json";
 }
 
+String tflRailStationsCachePath(const String& line) {
+    return String("/tfl_rail_stations_") + line + ".json";
+}
+
 bool extractDataArray(const String& wrapped, String& array, String& error) {
     const int start = wrapped.indexOf('[');
     const int end = wrapped.lastIndexOf(']');
@@ -140,6 +145,15 @@ bool extractDataArray(const String& wrapped, String& array, String& error) {
 
 bool isSafeRouteCode(const String& value) {
     return value.length() <= 16 && isOfficialBusIdentifier(value.c_str());
+}
+
+bool isValidJsonObject(const String& json) {
+    StaticJsonDocument<32> filter;
+    filter.to<JsonObject>();
+    StaticJsonDocument<32> output;
+    return !deserializeJson(output, json,
+                            DeserializationOption::Filter(filter)) &&
+           output.is<JsonObject>();
 }
 
 std::string visibleStopLabel(const std::string& input) {
@@ -167,7 +181,8 @@ void writeStopsJson(const std::vector<transitink::BusCatalogStop>& stops, String
     for (const auto& stop : stops) {
         appendJsonObject(json, first, [&](JsonObject item) {
             item["id"] = stop.stopId.c_str();
-            item["label_tc"] = visibleStopLabel(stop.labelTc).c_str();
+            item["label_tc"] = visibleStopLabel(stop.labelTc);
+            item["label_en"] = visibleStopLabel(stop.labelEn);
             item["sequence"] = stop.sequence;
         });
     }
@@ -179,7 +194,7 @@ std::vector<transitink::BusStopLabel> labelsFromStops(
     std::vector<transitink::BusStopLabel> labels;
     labels.reserve(stops.size());
     for (const auto& stop : stops) {
-        labels.push_back({stop.stopId, stop.labelTc});
+        labels.push_back({stop.stopId, stop.labelTc, stop.labelEn});
     }
     return labels;
 }
@@ -199,6 +214,10 @@ bool parseCatalogBusOperator(const String& operatorId, transitink::BusOperator& 
         op = transitink::BusOperator::Citybus;
         return true;
     }
+    if (operatorId == "tfl") {
+        op = transitink::BusOperator::Tfl;
+        return true;
+    }
     return false;
 }
 
@@ -208,8 +227,9 @@ bool parseCatalogRailMode(const String& modeId, transitink::RailMode& mode) {
 
 WidgetCatalogService::WidgetCatalogService(KmbClient& kmb,
                                            CitybusClient& citybus,
-                                           GmbClient& gmb)
-    : kmb_(kmb), citybus_(citybus), gmb_(gmb) {}
+                                           GmbClient& gmb,
+                                           TflClient& tfl)
+    : kmb_(kmb), citybus_(citybus), gmb_(gmb), tfl_(tfl) {}
 
 bool WidgetCatalogService::begin() {
     if (fsReady_) {
@@ -270,13 +290,19 @@ bool WidgetCatalogService::readJsonCache(const String& path, String& json) const
         json += static_cast<char>(value);
     }
     file.close();
-    return json.startsWith("{") && json.endsWith("}");
+    if (!json.startsWith("{") || !json.endsWith("}") ||
+        !isValidJsonObject(json)) {
+        json = "";
+        LittleFS.remove(path);
+        return false;
+    }
+    return true;
 }
 
 bool WidgetCatalogService::writeJsonCache(const String& path,
                                           const String& json,
                                           String& error) const {
-    if (!fsReady_ || json.isEmpty() ||
+    if (!fsReady_ || json.isEmpty() || !isValidJsonObject(json) ||
         json.length() > transitink::kMaxCatalogResponseBytes) {
         error = "目錄快取內容不正確";
         return false;
@@ -455,6 +481,11 @@ bool WidgetCatalogService::listBusRoutes(transitink::BusOperator op,
                                          bool refresh,
                                          String& json,
                                          String& error) {
+    if (op == transitink::BusOperator::Tfl) {
+        json = "{\"data\":[]}";
+        error = "";
+        return true;
+    }
     const bool citybus = op == transitink::BusOperator::Citybus;
     const String responseCache = citybus ? kCitybusRouteListCachePath
                                          : kKmbRouteListCachePath;
@@ -486,6 +517,7 @@ bool WidgetCatalogService::listBusRoutes(transitink::BusOperator op,
         appendJsonObject(json, first, [&](JsonObject item) {
             item["id"] = routeId.c_str();
             item["label_tc"] = routeId.c_str();
+            item["label_en"] = routeId.c_str();
         });
         if (json.length() > transitink::kMaxCatalogResponseBytes) {
             json = "";
@@ -504,6 +536,38 @@ bool WidgetCatalogService::listBusDirections(transitink::BusOperator op,
                                              const String& route,
                                              String& json,
                                              String& error) {
+    if (op == transitink::BusOperator::Tfl) {
+        std::vector<transitink::BusCatalogRoute> rows;
+        if (!tfl_.fetchDirections(route, rows, error)) {
+            return false;
+        }
+        beginList(json);
+        bool first = true;
+        for (const auto& row : rows) {
+            appendJsonObject(json, first, [&](JsonObject item) {
+                const std::string id =
+                    row.directionId + ":" + row.serviceType;
+                const std::string label =
+                    row.originLabelTc + " 往 " + row.destinationLabelTc;
+                const std::string labelEn =
+                    row.originLabelEn + " to " + row.destinationLabelEn;
+                item["id"] = id;
+                item["label_tc"] = label;
+                item["label_en"] = labelEn;
+                item["direction_id"] = row.directionId.c_str();
+                item["service_type"] = row.serviceType.c_str();
+                item["origin_label_tc"] = row.originLabelTc.c_str();
+                item["destination_label_tc"] =
+                    row.destinationLabelTc.c_str();
+                item["origin_label_en"] = row.originLabelEn.c_str();
+                item["destination_label_en"] =
+                    row.destinationLabelEn.c_str();
+            });
+        }
+        endList(json);
+        error = "";
+        return true;
+    }
     if (!isBusQueryValid(route, "I", "1")) {
         error = "路線查詢參數不正確";
         return false;
@@ -534,12 +598,21 @@ bool WidgetCatalogService::listBusDirections(transitink::BusOperator op,
     for (const auto& row : rows) {
         appendJsonObject(json, first, [&](JsonObject item) {
             const std::string id = row.directionId + ":" + row.serviceType;
-            item["id"] = id.c_str();
-            item["label_tc"] = (row.originLabelTc + " 往 " + row.destinationLabelTc).c_str();
+            const std::string label =
+                row.originLabelTc + " 往 " + row.destinationLabelTc;
+            const std::string labelEn =
+                row.originLabelEn.empty() || row.destinationLabelEn.empty()
+                    ? ""
+                    : row.originLabelEn + " to " + row.destinationLabelEn;
+            item["id"] = id;
+            item["label_tc"] = label;
+            item["label_en"] = labelEn;
             item["direction_id"] = row.directionId.c_str();
             item["service_type"] = row.serviceType.c_str();
             item["origin_label_tc"] = row.originLabelTc.c_str();
             item["destination_label_tc"] = row.destinationLabelTc.c_str();
+            item["origin_label_en"] = row.originLabelEn.c_str();
+            item["destination_label_en"] = row.destinationLabelEn.c_str();
         });
         if (json.length() > transitink::kMaxCatalogResponseBytes) {
             json = "";
@@ -640,6 +713,7 @@ bool WidgetCatalogService::writeCitybusAggregateCache(
         doc["seq"] = stop.sequence;
         doc["stop"] = stop.stopId.c_str();
         doc["name_tc"] = stop.labelTc.c_str();
+        doc["name_en"] = stop.labelEn.c_str();
         if (doc.overflowed() || serializeJson(doc, file) == 0) {
             file.close();
             LittleFS.remove(tempPath);
@@ -769,6 +843,15 @@ bool WidgetCatalogService::listBusStops(transitink::BusOperator op,
                                         bool refresh,
                                         String& json,
                                         String& error) {
+    if (op == transitink::BusOperator::Tfl) {
+        std::vector<transitink::BusCatalogStop> stops;
+        if (!tfl_.fetchStops(route, direction, serviceType, stops, error)) {
+            return false;
+        }
+        writeStopsJson(stops, json);
+        error = "";
+        return true;
+    }
     const char* operatorId = transitink::busOperatorId(op);
     std::string validationError;
     auto noFetch = [](void*) { return true; };
@@ -858,6 +941,7 @@ bool WidgetCatalogService::listGmbRoutes(bool refresh,
         appendJsonObject(json, first, [&](JsonObject item) {
             item["id"] = routeCode.c_str();
             item["label_tc"] = routeCode.c_str();
+            item["label_en"] = routeCode.c_str();
         });
     }
     endList(json);
@@ -914,13 +998,23 @@ bool WidgetCatalogService::listGmbDirections(const String& routeCode,
             const std::string id = direction.routeId + ":" + direction.routeSeq;
             const std::string label = direction.originLabelTc + " 往 " +
                                       direction.destinationLabelTc;
-            item["id"] = id.c_str();
-            item["label_tc"] = label.c_str();
+            const std::string labelEn =
+                direction.originLabelEn.empty() ||
+                        direction.destinationLabelEn.empty()
+                    ? ""
+                    : direction.originLabelEn + " to " +
+                          direction.destinationLabelEn;
+            item["id"] = id;
+            item["label_tc"] = label;
+            item["label_en"] = labelEn;
             item["region"] = direction.region.c_str();
             item["route_id"] = direction.routeId.c_str();
             item["route_seq"] = direction.routeSeq.c_str();
             item["origin_label_tc"] = direction.originLabelTc.c_str();
             item["destination_label_tc"] = direction.destinationLabelTc.c_str();
+            item["origin_label_en"] = direction.originLabelEn.c_str();
+            item["destination_label_en"] =
+                direction.destinationLabelEn.c_str();
         });
     }
     endList(json);
@@ -955,7 +1049,8 @@ bool WidgetCatalogService::listGmbStops(const String& routeId,
     for (const auto& stop : stops) {
         appendJsonObject(json, first, [&](JsonObject item) {
             item["id"] = stop.stopSeq.c_str();
-            item["label_tc"] = visibleStopLabel(stop.labelTc).c_str();
+            item["label_tc"] = visibleStopLabel(stop.labelTc);
+            item["label_en"] = visibleStopLabel(stop.labelEn);
             item["stop_id"] = stop.stopId.c_str();
             item["stop_seq"] = stop.stopSeq.c_str();
         });
@@ -970,10 +1065,21 @@ bool WidgetCatalogService::listRailLines(transitink::RailMode mode,
                                          String& json,
                                          String& error) {
     std::vector<transitink::StaticCatalogEntry> entries;
-    std::string projectionError;
-    if (!transitink::listStaticRailLines(mode, entries, projectionError)) {
-        error = projectionError.c_str();
-        return false;
+    if (mode == transitink::RailMode::LondonRail) {
+        if (readJsonCache(kTflRailLinesCachePath, json)) {
+            error = "";
+            return true;
+        }
+        if (!tfl_.fetchRailLines(entries, error)) {
+            return false;
+        }
+    } else {
+        std::string projectionError;
+        if (!transitink::listStaticRailLines(mode, entries,
+                                             projectionError)) {
+            error = projectionError.c_str();
+            return false;
+        }
     }
     beginList(json);
     bool first = true;
@@ -981,9 +1087,14 @@ bool WidgetCatalogService::listRailLines(transitink::RailMode mode,
         appendJsonObject(json, first, [&](JsonObject item) {
             item["id"] = entry.id.c_str();
             item["label_tc"] = entry.labelTc.c_str();
+            item["label_en"] = entry.labelEn.c_str();
         });
     }
     endList(json);
+    if (mode == transitink::RailMode::LondonRail &&
+        !writeJsonCache(kTflRailLinesCachePath, json, error)) {
+        return false;
+    }
     error = "";
     return true;
 }
@@ -993,11 +1104,26 @@ bool WidgetCatalogService::listRailStations(transitink::RailMode mode,
                                             String& json,
                                             String& error) {
     std::vector<transitink::StaticCatalogEntry> entries;
-    std::string projectionError;
-    if (!transitink::listStaticRailStations(
-            mode, lineOrRoute.c_str(), entries, projectionError)) {
-        error = projectionError.c_str();
-        return false;
+    if (mode == transitink::RailMode::LondonRail) {
+        if (!isOfficialTflIdentifier(lineOrRoute.c_str())) {
+            error = "倫敦鐵路路線代號格式不正確";
+            return false;
+        }
+        const String cachePath = tflRailStationsCachePath(lineOrRoute);
+        if (readJsonCache(cachePath, json)) {
+            error = "";
+            return true;
+        }
+        if (!tfl_.fetchRailStations(lineOrRoute, entries, error)) {
+            return false;
+        }
+    } else {
+        std::string projectionError;
+        if (!transitink::listStaticRailStations(
+                mode, lineOrRoute.c_str(), entries, projectionError)) {
+            error = projectionError.c_str();
+            return false;
+        }
     }
     beginList(json);
     bool first = true;
@@ -1005,9 +1131,14 @@ bool WidgetCatalogService::listRailStations(transitink::RailMode mode,
         appendJsonObject(json, first, [&](JsonObject item) {
             item["id"] = entry.id.c_str();
             item["label_tc"] = entry.labelTc.c_str();
+            item["label_en"] = entry.labelEn.c_str();
         });
     }
     endList(json);
+    if (mode == transitink::RailMode::LondonRail &&
+        !writeJsonCache(tflRailStationsCachePath(lineOrRoute), json, error)) {
+        return false;
+    }
     error = "";
     return true;
 }
@@ -1018,11 +1149,24 @@ bool WidgetCatalogService::listRailDirections(transitink::RailMode mode,
                                               String& json,
                                               String& error) {
     std::vector<transitink::StaticCatalogEntry> entries;
-    std::string projectionError;
-    if (!transitink::listStaticRailDirections(
-            mode, lineOrRoute.c_str(), station.c_str(), entries, projectionError)) {
-        error = projectionError.c_str();
-        return false;
+    if (mode == transitink::RailMode::LondonRail) {
+        if (!isOfficialTflIdentifier(lineOrRoute.c_str()) ||
+            !isOfficialTflIdentifier(station.c_str())) {
+            error = "倫敦鐵路方向查詢參數不正確";
+            return false;
+        }
+        entries = {
+            {"inbound", "Inbound", "Inbound"},
+            {"outbound", "Outbound", "Outbound"},
+        };
+    } else {
+        std::string projectionError;
+        if (!transitink::listStaticRailDirections(
+                mode, lineOrRoute.c_str(), station.c_str(), entries,
+                projectionError)) {
+            error = projectionError.c_str();
+            return false;
+        }
     }
     beginList(json);
     bool first = true;
@@ -1030,6 +1174,7 @@ bool WidgetCatalogService::listRailDirections(transitink::RailMode mode,
         appendJsonObject(json, first, [&](JsonObject item) {
             item["id"] = entry.id.c_str();
             item["label_tc"] = entry.labelTc.c_str();
+            item["label_en"] = entry.labelEn.c_str();
         });
     }
     endList(json);
@@ -1050,6 +1195,7 @@ bool WidgetCatalogService::listJourneyLocations(String& json, String& error) {
         appendJsonObject(json, first, [&](JsonObject item) {
             item["id"] = entry.id.c_str();
             item["label_tc"] = entry.labelTc.c_str();
+            item["label_en"] = entry.labelEn.c_str();
         });
     }
     endList(json);
@@ -1073,6 +1219,7 @@ bool WidgetCatalogService::listJourneyDestinations(const String& locationId,
         appendJsonObject(json, first, [&](JsonObject item) {
             item["id"] = entry.id.c_str();
             item["label_tc"] = entry.labelTc.c_str();
+            item["label_en"] = entry.labelEn.c_str();
         });
     }
     endList(json);
@@ -1172,7 +1319,7 @@ bool WidgetCatalogService::refreshBusRoute(transitink::BusOperator op,
         return false;
     }
 
-    if (refreshRouteList) {
+    if (refreshRouteList && op != transitink::BusOperator::Tfl) {
         String ignoredRoutes;
         if (!listBusRoutes(op, true, ignoredRoutes, error)) {
             return false;
@@ -1202,8 +1349,10 @@ bool WidgetCatalogService::refreshBusRoute(transitink::BusOperator op,
         const String serviceType = direction["service_type"] | "";
         String stopsJson;
         const bool forceRefresh = op == transitink::BusOperator::Citybus ||
+                                  op == transitink::BusOperator::Tfl ||
                                   refreshKmbStopLabels;
-        if (op != transitink::BusOperator::Citybus && !forceRefresh) {
+        if (op != transitink::BusOperator::Citybus &&
+            op != transitink::BusOperator::Tfl && !forceRefresh) {
             LittleFS.remove(kmbRouteStopCachePath(normalized, directionId, serviceType));
         }
         if (!listBusStops(op, normalized, directionId, serviceType,

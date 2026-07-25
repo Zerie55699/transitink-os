@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Build the versioned TransitInk frontend transport catalog.
 
-The generated catalog deliberately contains only identifiers and Traditional
-Chinese labels required by the settings portal.  ETA responses remain live.
+The generated catalog deliberately contains only identifiers and official
+Traditional Chinese and English labels required by the settings portal.  A
+missing official translation is emitted as an empty string so the client can
+fall back to the provider's original language.  ETA responses remain live.
 Network refreshes are explicit; normal firmware builds consume checked-in
 generated assets and never contact a transport provider.
 """
@@ -16,6 +18,7 @@ import hashlib
 import json
 import re
 import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -33,8 +36,8 @@ GENERATED_HEADER = ROOT / "include" / "generated" / "TransitCatalogAssets.h"
 GENERATED_SOURCE = ROOT / "src" / "generated" / "TransitCatalogAssets.cpp"
 
 SCHEMA_VERSION = 1
-MAX_RELEASE_BYTES = 1_310_720
-MAX_INDEX_GZIP_BYTES = 65_536
+MAX_RELEASE_BYTES = 3_145_728
+MAX_INDEX_GZIP_BYTES = 196_608
 
 KMB_ROUTES_URL = "https://data.etabus.gov.hk/v1/transport/kmb/route/"
 KMB_STOPS_URL = "https://data.etabus.gov.hk/v1/transport/kmb/stop"
@@ -47,12 +50,23 @@ CTB_STOP_URL = "https://rt.data.gov.hk/v2/transport/citybus/stop/{stop}"
 GMB_GEOJSON_URL = "https://static.data.gov.hk/td/routes-fares-geojson/JSON_GMB.json"
 GMB_ROUTES_URL = "https://data.etagmb.gov.hk/route/{region}"
 GMB_ROUTE_URL = "https://data.etagmb.gov.hk/route/{region}/{route_code}"
+TFL_BUS_ROUTES_URL = "https://api.tfl.gov.uk/Line/Mode/bus/Route"
+TFL_BUS_SEQUENCE_URL = (
+    "https://api.tfl.gov.uk/Line/{route}/Route/Sequence/all"
+)
+TFL_RAIL_LINES_URL = (
+    "https://api.tfl.gov.uk/Line/Mode/"
+    "tube,dlr,overground,elizabeth-line,tram"
+)
+TFL_RAIL_STATIONS_URL = "https://api.tfl.gov.uk/Line/{line}/StopPoints"
+TFL_ANONYMOUS_REQUEST_INTERVAL_SECONDS = 1.3
 
 ASSET_NAMES = (
     "index.json.gz",
     "stops-kmb.json.gz",
     "stops-ctb.json.gz",
     "stops-gmb.json.gz",
+    "stops-tfl.json.gz",
     "rail.json.gz",
 )
 
@@ -139,6 +153,17 @@ def normalized_label(value: Any) -> str:
     return label.strip()
 
 
+def optional_label(value: Any) -> str:
+    if value is None or str(value).strip() == "":
+        return ""
+    text = str(value).strip()
+    if len(text.encode("utf-8")) > 96 or "\ufffd" in text:
+        return ""
+    return re.sub(
+        r"\s*\((?:[A-Z]{1,4}\d{2,8}|[A-F0-9]{8,})\)\s*$", "", text
+    ).strip()
+
+
 def normalized_stop_sequence(
     stops: Iterable[dict[str, Any]], context: str
 ) -> list[dict[str, Any]]:
@@ -210,6 +235,91 @@ def fetch_gmb_catalog(cache: Path, workers: int) -> None:
             region, route_code, payload = future.result()
             details[f"{region}:{route_code}"] = payload
     write_if_changed(cache / "gmb-eta-routes.json", canonical_json(details))
+
+
+def fetch_tfl_catalog(cache: Path, workers: int) -> None:
+    cache.mkdir(parents=True, exist_ok=True)
+    bus_routes_content = request_bytes(TFL_BUS_ROUTES_URL)
+    bus_routes = parse_json_bytes(bus_routes_content, "tfl-bus-routes.json")
+    if not isinstance(bus_routes, list) or not bus_routes:
+        raise CatalogError("TfL 巴士路線目錄不可為空")
+    write_if_changed(cache / "tfl-bus-routes.json", bus_routes_content)
+
+    rail_lines_content = request_bytes(TFL_RAIL_LINES_URL)
+    rail_lines = parse_json_bytes(rail_lines_content, "tfl-rail-lines.json")
+    if not isinstance(rail_lines, list) or not rail_lines:
+        raise CatalogError("TfL 鐵路路線目錄不可為空")
+    write_if_changed(cache / "tfl-rail-lines.json", rail_lines_content)
+
+    limiter_lock = threading.Lock()
+    next_request_at = [time.monotonic()]
+
+    def rate_limited_cached_request(url: str, path: Path) -> bytes:
+        if path.exists() and path.stat().st_size > 0:
+            return path.read_bytes()
+        with limiter_lock:
+            delay = next_request_at[0] - time.monotonic()
+            if delay > 0:
+                time.sleep(delay)
+            next_request_at[0] = (
+                time.monotonic() + TFL_ANONYMOUS_REQUEST_INTERVAL_SECONDS
+            )
+        content = request_bytes(url)
+        write_if_changed(path, content)
+        return content
+
+    bus_ids = sorted(
+        {
+            require_text(row.get("id"), "TfL 巴士路線", 16).lower()
+            for row in bus_routes
+            if isinstance(row, dict)
+        }
+    )
+    rail_ids = sorted(
+        {
+            require_text(row.get("id"), "TfL 鐵路路線", 48).lower()
+            for row in rail_lines
+            if isinstance(row, dict)
+        }
+    )
+
+    def fetch_bus_sequence(route: str) -> None:
+        path = cache / "tfl-bus-sequences" / f"{route}.json"
+        content = rate_limited_cached_request(
+            TFL_BUS_SEQUENCE_URL.format(
+                route=urllib.parse.quote(route, safe="")
+            ),
+            path,
+        )
+        payload = parse_json_bytes(content, str(path))
+        if not isinstance(payload, dict):
+            raise CatalogError(f"TfL 巴士 {route} 站序格式不正確")
+
+    def fetch_rail_stations(line: str) -> None:
+        path = cache / "tfl-rail-stations" / f"{line}.json"
+        content = rate_limited_cached_request(
+            TFL_RAIL_STATIONS_URL.format(
+                line=urllib.parse.quote(line, safe="")
+            ),
+            path,
+        )
+        payload = parse_json_bytes(content, str(path))
+        if not isinstance(payload, list):
+            raise CatalogError(f"TfL 鐵路 {line} 車站格式不正確")
+
+    jobs = [
+        (fetch_bus_sequence, route)
+        for route in bus_ids
+    ] + [
+        (fetch_rail_stations, line)
+        for line in rail_ids
+    ]
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=max(1, min(workers, 4))
+    ) as pool:
+        futures = [pool.submit(function, value) for function, value in jobs]
+        for future in concurrent.futures.as_completed(futures):
+            future.result()
 
 
 def ctb_route_stop_rows(cache: Path, route: str, direction: str) -> list[dict[str, Any]]:
@@ -302,7 +412,10 @@ def build_kmb(cache: Path) -> tuple[dict[str, Any], dict[str, Any], str]:
         raise CatalogError("九巴 bulk 目錄不可為空")
 
     labels = {
-        require_text(row.get("stop"), "九巴站牌 ID", 48): normalized_label(row.get("name_tc"))
+        require_text(row.get("stop"), "九巴站牌 ID", 48): (
+            normalized_label(row.get("name_tc")),
+            optional_label(row.get("name_en")),
+        )
         for row in stops
     }
     metadata: dict[tuple[str, str, str], dict[str, str]] = {}
@@ -315,6 +428,8 @@ def build_kmb(cache: Path) -> tuple[dict[str, Any], dict[str, Any], str]:
             "service_type": service,
             "origin_label_tc": require_text(row.get("orig_tc"), "九巴起點"),
             "destination_label_tc": require_text(row.get("dest_tc"), "九巴終點"),
+            "origin_label_en": optional_label(row.get("orig_en")),
+            "destination_label_en": optional_label(row.get("dest_en")),
             "stop_key": f"{route}:{bound}:{service}",
         }
 
@@ -334,7 +449,8 @@ def build_kmb(cache: Path) -> tuple[dict[str, Any], dict[str, Any], str]:
         grouped[metadata[key]["stop_key"]].append(
             {
                 "id": stop_id,
-                "label_tc": labels[stop_id],
+                "label_tc": labels[stop_id][0],
+                "label_en": labels[stop_id][1],
                 "sequence": positive_sequence(row.get("seq"), "九巴站序"),
             }
         )
@@ -380,6 +496,8 @@ def build_ctb(cache: Path) -> tuple[dict[str, Any], dict[str, Any], str]:
         route_meta[route] = {
             "origin": require_text(row.get("orig_tc"), "城巴起點"),
             "destination": require_text(row.get("dest_tc"), "城巴終點"),
+            "origin_en": optional_label(row.get("orig_en")),
+            "destination_en": optional_label(row.get("dest_en")),
         }
 
     routes_out: dict[str, list[dict[str, str]]] = defaultdict(list)
@@ -387,9 +505,11 @@ def build_ctb(cache: Path) -> tuple[dict[str, Any], dict[str, Any], str]:
     for route in sorted(route_meta):
         meta = route_meta[route]
         found = False
-        for path_direction, direction_id, origin, destination in (
-            ("outbound", "O", meta["origin"], meta["destination"]),
-            ("inbound", "I", meta["destination"], meta["origin"]),
+        for path_direction, direction_id, origin, destination, origin_en, destination_en in (
+            ("outbound", "O", meta["origin"], meta["destination"],
+             meta["origin_en"], meta["destination_en"]),
+            ("inbound", "I", meta["destination"], meta["origin"],
+             meta["destination_en"], meta["origin_en"]),
         ):
             rows = route_stop_payloads.get(f"{route}:{path_direction}")
             if not isinstance(rows, list) or not rows:
@@ -406,6 +526,7 @@ def build_ctb(cache: Path) -> tuple[dict[str, Any], dict[str, Any], str]:
                     {
                         "id": stop_id,
                         "label_tc": normalized_label(stop_data.get("name_tc")),
+                        "label_en": optional_label(stop_data.get("name_en")),
                         "sequence": positive_sequence(row.get("seq"), "城巴站序"),
                     }
                 )
@@ -420,6 +541,8 @@ def build_ctb(cache: Path) -> tuple[dict[str, Any], dict[str, Any], str]:
                     "service_type": "1",
                     "origin_label_tc": origin,
                     "destination_label_tc": destination,
+                    "origin_label_en": origin_en,
+                    "destination_label_en": destination_en,
                     "stop_key": stop_key,
                 }
             )
@@ -491,6 +614,8 @@ def build_gmb(cache: Path) -> tuple[dict[str, Any], dict[str, Any], str]:
             "route_seq": route_seq,
             "origin_label_tc": require_text(properties.get("locStartNameC"), "小巴起點"),
             "destination_label_tc": require_text(properties.get("locEndNameC"), "小巴終點"),
+            "origin_label_en": optional_label(properties.get("locStartNameE")),
+            "destination_label_en": optional_label(properties.get("locEndNameE")),
             "stop_key": stop_key,
         }
         grouped_stops[stop_key].append(
@@ -499,6 +624,7 @@ def build_gmb(cache: Path) -> tuple[dict[str, Any], dict[str, Any], str]:
                 "stop_id": stop_id,
                 "stop_seq": str(stop_seq),
                 "label_tc": normalized_label(properties.get("stopNameC")),
+                "label_en": optional_label(properties.get("stopNameE")),
                 "sequence": stop_seq,
             }
         )
@@ -521,18 +647,242 @@ def build_gmb(cache: Path) -> tuple[dict[str, Any], dict[str, Any], str]:
     )
 
 
+def build_tfl(
+    cache: Path,
+) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]], str]:
+    bus_routes = read_json(cache / "tfl-bus-routes.json")
+    rail_lines = read_json(cache / "tfl-rail-lines.json")
+    if not isinstance(bus_routes, list) or not bus_routes:
+        raise CatalogError("TfL 巴士路線目錄不可為空，請先執行 --refresh-tfl")
+    if not isinstance(rail_lines, list) or not rail_lines:
+        raise CatalogError("TfL 鐵路路線目錄不可為空，請先執行 --refresh-tfl")
+
+    routes_out: dict[str, list[dict[str, str]]] = defaultdict(list)
+    stops_out: dict[str, list[dict[str, Any]]] = {}
+    timestamps: list[str] = []
+    for line in sorted(bus_routes, key=lambda item: str(item.get("id", ""))):
+        if not isinstance(line, dict):
+            continue
+        route_source = require_text(line.get("id"), "TfL 巴士路線", 16)
+        if not re.fullmatch(r"[A-Za-z0-9]+", route_source):
+            raise CatalogError(f"TfL 巴士路線 ID 格式不正確：{route_source}")
+        route = route_source.upper()
+        sections = line.get("routeSections")
+        if not isinstance(sections, list) or not sections:
+            raise CatalogError(f"TfL 巴士路線沒有方向：{route}")
+        sequence_path = cache / "tfl-bus-sequences" / f"{route_source.lower()}.json"
+        sequence_payload = read_json(sequence_path)
+        ordered_routes = (
+            sequence_payload.get("orderedLineRoutes")
+            if isinstance(sequence_payload, dict)
+            else None
+        )
+        stop_sequences = (
+            sequence_payload.get("stopPointSequences")
+            if isinstance(sequence_payload, dict)
+            else None
+        )
+        if not isinstance(ordered_routes, list) or not isinstance(
+            stop_sequences, list
+        ):
+            raise CatalogError(f"TfL 巴士 {route} 站序格式不正確")
+
+        labels: dict[str, str] = {}
+        for sequence in stop_sequences:
+            points = sequence.get("stopPoint") if isinstance(sequence, dict) else None
+            if not isinstance(points, list):
+                continue
+            for point in points:
+                if not isinstance(point, dict):
+                    continue
+                stop_id = require_text(point.get("id"), "TfL 巴士站牌 ID", 48)
+                if not re.fullmatch(r"[A-Za-z0-9]+", stop_id):
+                    raise CatalogError(f"TfL 巴士站牌 ID 格式不正確：{stop_id}")
+                labels.setdefault(
+                    stop_id, normalized_label(point.get("name"))
+                )
+
+        usable_ordered: list[list[str]] = []
+        for ordered in ordered_routes:
+            ids = ordered.get("naptanIds") if isinstance(ordered, dict) else None
+            if not isinstance(ids, list) or not ids:
+                continue
+            parsed_ids = [
+                require_text(value, "TfL 巴士站牌 ID", 48)
+                for value in ids
+            ]
+            usable_ordered.append(parsed_ids)
+
+        seen_directions: set[str] = set()
+        for section in sections:
+            if not isinstance(section, dict):
+                continue
+            direction = require_text(
+                section.get("direction"), "TfL 巴士方向", 16
+            ).lower()
+            if direction not in {"inbound", "outbound"}:
+                continue
+            originator = require_text(
+                section.get("originator"), "TfL 巴士起點 ID", 48
+            )
+            destination = require_text(
+                section.get("destination"), "TfL 巴士終點 ID", 48
+            )
+            if not re.fullmatch(r"[A-Za-z0-9]+", originator) or not re.fullmatch(
+                r"[A-Za-z0-9]+", destination
+            ):
+                raise CatalogError(f"TfL 巴士 {route} 方向 ID 格式不正確")
+            service_type = f"{originator}|{destination}"
+            direction_key = f"{direction}:{service_type}"
+            if direction_key in seen_directions:
+                continue
+
+            matching_segments: dict[tuple[str, ...], list[str]] = {}
+            for ids in usable_ordered:
+                try:
+                    start = ids.index(originator)
+                    end = ids.index(destination, start)
+                except ValueError:
+                    continue
+                segment = ids[start : end + 1]
+                matching_segments[tuple(segment)] = segment
+            if not matching_segments and len(usable_ordered) == 1:
+                only_route = usable_ordered[0]
+                matching_segments[tuple(only_route)] = only_route
+            if not matching_segments:
+                raise CatalogError(
+                    f"TfL 巴士 {route} 找不到方向站序：{direction_key}"
+                )
+            # TfL can publish two ordered variants with the same public
+            # origin/destination and no distinct service identifier. Keep the
+            # longest official variant so every shared stop and the most
+            # complete branch remain selectable.
+            selected = max(
+                matching_segments.values(),
+                key=lambda values: (len(values), tuple(values)),
+            )
+            parsed_stops = []
+            for sequence_number, stop_id in enumerate(selected, 1):
+                label = labels.get(stop_id)
+                if not label:
+                    raise CatalogError(
+                        f"TfL 巴士 {route} 站牌名稱不完整：{stop_id}"
+                    )
+                parsed_stops.append(
+                    {
+                        "id": stop_id,
+                        "label_tc": label,
+                        "label_en": label,
+                        "sequence": sequence_number,
+                    }
+                )
+            stop_key = f"{route}:{direction}:{service_type}"
+            stops_out[stop_key] = normalized_stop_sequence(
+                parsed_stops, f"TfL 巴士 {stop_key} "
+            )
+            origin_label = normalized_label(section.get("originationName"))
+            destination_label = normalized_label(section.get("destinationName"))
+            routes_out[route].append(
+                {
+                    "direction_id": direction,
+                    "service_type": service_type,
+                    "origin_label_tc": origin_label,
+                    "destination_label_tc": destination_label,
+                    "origin_label_en": origin_label,
+                    "destination_label_en": destination_label,
+                    "stop_key": stop_key,
+                }
+            )
+            seen_directions.add(direction_key)
+        if not routes_out[route]:
+            raise CatalogError(f"TfL 巴士路線沒有可用方向：{route}")
+        timestamps.extend(
+            [str(line.get("created", "")), str(line.get("modified", ""))]
+        )
+
+    rail_groups: list[dict[str, Any]] = []
+    for line in sorted(rail_lines, key=lambda item: str(item.get("id", ""))):
+        if not isinstance(line, dict):
+            continue
+        line_id = require_text(line.get("id"), "TfL 鐵路路線 ID", 48)
+        if not re.fullmatch(r"[A-Za-z0-9-]+", line_id):
+            raise CatalogError(f"TfL 鐵路路線 ID 格式不正確：{line_id}")
+        line_label = normalized_label(line.get("name"))
+        stations_payload = read_json(
+            cache / "tfl-rail-stations" / f"{line_id.lower()}.json"
+        )
+        if not isinstance(stations_payload, list) or not stations_payload:
+            raise CatalogError(f"TfL 鐵路 {line_id} 車站不可為空")
+        stations_by_id: dict[str, dict[str, str]] = {}
+        for station in stations_payload:
+            if not isinstance(station, dict):
+                continue
+            station_id = require_text(
+                station.get("id"), "TfL 鐵路車站 ID", 64
+            )
+            if not re.fullmatch(r"[A-Za-z0-9-]+", station_id):
+                raise CatalogError(
+                    f"TfL 鐵路車站 ID 格式不正確：{station_id}"
+                )
+            station_label = normalized_label(station.get("commonName"))
+            stations_by_id[station_id] = {
+                "id": station_id,
+                "label_tc": station_label,
+                "label_en": station_label,
+            }
+        if not stations_by_id:
+            raise CatalogError(f"TfL 鐵路 {line_id} 沒有可用車站")
+        rail_groups.append(
+            {
+                "id": line_id,
+                "label_tc": line_label,
+                "label_en": line_label,
+                "stations": sorted(
+                    stations_by_id.values(),
+                    key=lambda item: (item["label_en"], item["id"]),
+                ),
+                "directions": [
+                    {
+                        "id": "inbound",
+                        "label_tc": "Inbound",
+                        "label_en": "Inbound",
+                    },
+                    {
+                        "id": "outbound",
+                        "label_tc": "Outbound",
+                        "label_en": "Outbound",
+                    },
+                ],
+            }
+        )
+        timestamps.extend(
+            [str(line.get("created", "")), str(line.get("modified", ""))]
+        )
+
+    return (
+        {"routes": dict(sorted(routes_out.items()))},
+        {"provider": "tfl", "routes": dict(sorted(stops_out.items()))},
+        rail_groups,
+        max((value for value in timestamps if value), default=""),
+    )
+
+
 def extract_rail_catalog(source_path: Path) -> dict[str, Any]:
     source = source_path.read_text(encoding="utf-8")
     arrays: dict[str, list[dict[str, str]]] = {}
     array_pattern = re.compile(
         r"const TransitCatalogItem\s+(k\w+)\[\]\s*=\s*\{(.*?)\n\};", re.S
     )
-    item_pattern = re.compile(r'\{"((?:\\.|[^"\\])*)",\s*"((?:\\.|[^"\\])*)"\}')
+    item_pattern = re.compile(
+        r'\{"((?:\\.|[^"\\])*)",\s*"((?:\\.|[^"\\])*)"'
+        r'(?:,\s*"((?:\\.|[^"\\])*)")?\}'
+    )
     for match in array_pattern.finditer(source):
         name, body = match.groups()
         arrays[name] = [
             {"id": bytes(item[0], "utf-8").decode("unicode_escape") if "\\" in item[0] else item[0],
-             "label_tc": bytes(item[1], "utf-8").decode("unicode_escape") if "\\" in item[1] else item[1]}
+             "label_tc": bytes(item[1], "utf-8").decode("unicode_escape") if "\\" in item[1] else item[1],
+             "label_en": bytes(item[2], "utf-8").decode("unicode_escape") if "\\" in item[2] else item[2]}
             for item in item_pattern.findall(body)
         ]
 
@@ -545,10 +895,11 @@ def extract_rail_catalog(source_path: Path) -> dict[str, Any]:
         if not match:
             raise CatalogError(f"找不到 {array_name}")
         group_pattern = re.compile(
-            r'\{"([^"]+)",\s*"([^"]+)",\s*(k\w+),\s*itemCount\([^)]*\),\s*(k\w+),'
+            r'\{"([^"]+)",\s*"([^"]+)",\s*(k\w+),\s*itemCount\([^)]*\),'
+            r'\s*(k\w+),\s*itemCount\([^)]*\)(?:,\s*"([^"]*)")?\}'
         )
         parsed = []
-        for group_id, label, stations_name, directions_name in group_pattern.findall(match.group(1)):
+        for group_id, label, stations_name, directions_name, label_en in group_pattern.findall(match.group(1)):
             stations = arrays.get(stations_name)
             directions = arrays.get(directions_name)
             if not stations or not directions:
@@ -557,6 +908,7 @@ def extract_rail_catalog(source_path: Path) -> dict[str, Any]:
                 {
                     "id": group_id,
                     "label_tc": label,
+                    "label_en": label_en,
                     "stations": stations,
                     "directions": directions,
                 }
@@ -586,21 +938,30 @@ def build_assets(cache: Path) -> tuple[dict[str, bytes], dict[str, Any]]:
     kmb_index, kmb_stops, kmb_time = build_kmb(cache)
     ctb_index, ctb_stops, ctb_time = build_ctb(cache)
     gmb_index, gmb_stops, gmb_time = build_gmb(cache)
+    tfl_index, tfl_stops, tfl_rail, tfl_time = build_tfl(cache)
     rail = extract_rail_catalog(ROOT / "src" / "TransitCatalog.cpp")
+    rail["modes"]["london_rail"] = tfl_rail
 
-    generated_at = max(kmb_time, ctb_time, gmb_time)
+    generated_at = max(kmb_time, ctb_time, gmb_time, tfl_time)
     if not generated_at:
         generated_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     seed = {
         "schema_version": SCHEMA_VERSION,
         "generated_at": generated_at,
-        "bus": {"kmb_lwb": kmb_index, "ctb": ctb_index},
+        "bus": {"kmb_lwb": kmb_index, "ctb": ctb_index, "tfl": tfl_index},
         "gmb": gmb_index,
         "rail": rail,
     }
     revision = sha256_bytes(canonical_json(seed))[:16]
     index = with_common_metadata(
-        {"bus": {"kmb_lwb": kmb_index, "ctb": ctb_index}, "gmb": gmb_index},
+        {
+            "bus": {
+                "kmb_lwb": kmb_index,
+                "ctb": ctb_index,
+                "tfl": tfl_index,
+            },
+            "gmb": gmb_index,
+        },
         revision,
         generated_at,
     )
@@ -609,6 +970,7 @@ def build_assets(cache: Path) -> tuple[dict[str, bytes], dict[str, Any]]:
         "stops-kmb.json.gz": gzip_bytes(with_common_metadata(kmb_stops, revision, generated_at)),
         "stops-ctb.json.gz": gzip_bytes(with_common_metadata(ctb_stops, revision, generated_at)),
         "stops-gmb.json.gz": gzip_bytes(with_common_metadata(gmb_stops, revision, generated_at)),
+        "stops-tfl.json.gz": gzip_bytes(with_common_metadata(tfl_stops, revision, generated_at)),
         "rail.json.gz": gzip_bytes(with_common_metadata(rail, revision, generated_at)),
     }
     assets = {
@@ -627,6 +989,10 @@ def build_assets(cache: Path) -> tuple[dict[str, bytes], dict[str, Any]]:
             "ctb_stops": sum(len(stops) for stops in ctb_stops["routes"].values()),
             "gmb_routes": len(gmb_index["routes"]),
             "gmb_stops": sum(len(stops) for stops in gmb_stops["routes"].values()),
+            "tfl_bus_routes": len(tfl_index["routes"]),
+            "tfl_bus_stops": sum(
+                len(stops) for stops in tfl_stops["routes"].values()
+            ),
             "rail_routes": sum(len(groups) for groups in rail["modes"].values()),
             "rail_stations": sum(
                 len(group["stations"])
@@ -739,9 +1105,9 @@ const std::size_t kEmbeddedCatalogAssetCount =
 def validate_release(payloads: dict[str, bytes], manifest: dict[str, Any]) -> None:
     total = sum(len(value) for value in payloads.values())
     if len(payloads["index.json.gz"]) > MAX_INDEX_GZIP_BYTES:
-        raise CatalogError("index.json.gz 超過 64 KiB")
+        raise CatalogError("index.json.gz 超過 192 KiB")
     if total > MAX_RELEASE_BYTES:
-        raise CatalogError(f"完整目錄 {total} bytes 超過 1.25 MiB")
+        raise CatalogError(f"完整目錄 {total} bytes 超過 3 MiB")
     for asset_name, content in payloads.items():
         asset_metadata = manifest.get("assets", {}).get(asset_name, {})
         if asset_metadata.get("bytes") != len(content):
@@ -812,6 +1178,11 @@ def check_committed_outputs(output: Path) -> tuple[dict[str, bytes], dict[str, A
 def parse_args(argv: Iterable[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--refresh", action="store_true", help="download official sources")
+    parser.add_argument(
+        "--refresh-tfl",
+        action="store_true",
+        help="download only TfL bus and rail catalogue sources",
+    )
     parser.add_argument("--check", action="store_true", help="verify checked-in outputs")
     parser.add_argument("--cache-dir", type=Path, default=DEFAULT_CACHE)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT)
@@ -838,6 +1209,9 @@ def main(argv: Iterable[str] = sys.argv[1:]) -> int:
                     args.workers,
                 )
                 fetch_gmb_catalog(args.cache_dir, args.workers)
+                fetch_tfl_catalog(args.cache_dir, args.workers)
+            elif args.refresh_tfl:
+                fetch_tfl_catalog(args.cache_dir, args.workers)
             payloads, manifest = build_assets(args.cache_dir)
             validate_release(payloads, manifest)
             write_outputs(

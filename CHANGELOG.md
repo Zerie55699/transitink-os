@@ -2,6 +2,23 @@
 
 All notable user-visible changes to TransitInk OS will be documented here.
 
+## 1.1.0 - 2026-07-26
+
+- Expanded the dashboard from four widgets to three pages of four widgets;
+  Volume Down cycles through configured pages while preserving power-efficient
+  refresh behaviour.
+- Added embedded London bus and rail catalogues, live TfL arrivals, United
+  Kingdom weather locations, and London time-zone support.
+- Added Traditional Chinese and English interfaces, bilingual transport and
+  weather labels, and more compact English e-paper layouts.
+- Embedded complete Hong Kong and London transport catalogues for offline route,
+  direction, and stop selection, with manual on-device catalogue updates.
+- Distinguished loading, no-service, expired, and unavailable states so page
+  changes and failed live requests no longer show misleading arrival status or
+  hide fixed route and stop labels.
+- Improved settings-page mobile layout, first-time setup guidance, save/restart
+  safety, wake-button responsiveness, and scheduled/background wake handling.
+
 ## 1.0.2 - 2026-07-23
 
 - Added an optional daily automatic wake window, including schedules which

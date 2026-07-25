@@ -6,12 +6,26 @@
 
 int main() {
     transitink::WidgetSlots slots{};
-    static_assert(slots.size() == 4);
+    static_assert(slots.size() == 12);
+    static_assert(transitink::kWidgetsPerPage == 4);
+    static_assert(transitink::kWidgetPageCount == 3);
     for (const auto& slot : slots) assert(slot.type == transitink::WidgetType::Disabled);
 
     slots[0].type = transitink::WidgetType::BusEta;
     slots[1].type = transitink::WidgetType::BusEta;
     assert(transitink::isWidgetConfigValid(slots[0]) == false);
+    assert(transitink::widgetPageForSlot(0) == 0);
+    assert(transitink::widgetPageForSlot(4) == 1);
+    assert(transitink::widgetPageStart(2) == 8);
+    assert(transitink::enabledWidgetPageCount(slots) == 1);
+    assert(transitink::firstEnabledWidgetPage(slots) == 0);
+    slots[0].type = transitink::WidgetType::Disabled;
+    slots[1].type = transitink::WidgetType::Disabled;
+    slots[8].type = transitink::WidgetType::JourneyTime;
+    assert(transitink::enabledWidgetPageCount(slots) == 1);
+    assert(transitink::firstEnabledWidgetPage(slots) == 2);
+    assert(transitink::nextEnabledWidgetPage(slots, 0) == 2);
+    assert(transitink::nextEnabledWidgetPage(slots, 2) == 2);
 
     std::vector<bus_eta::RouteSelection> legacy = {
         {"268B", "O", "1", "STOP-A", "紅磡碼頭"},
@@ -39,15 +53,22 @@ int main() {
     assert(std::string(transitink::busOperatorId(transitink::BusOperator::Kmb)) == "kmb");
     assert(std::string(transitink::busOperatorId(transitink::BusOperator::LongWin)) == "lwb");
     assert(std::string(transitink::busOperatorId(transitink::BusOperator::Citybus)) == "ctb");
+    assert(std::string(transitink::busOperatorId(transitink::BusOperator::Tfl)) == "tfl");
     assert(transitink::parseBusOperatorId("lwb", busOperator));
     assert(busOperator == transitink::BusOperator::LongWin);
     assert(!transitink::parseBusOperatorId("unknown", busOperator));
+    assert(transitink::parseBusOperatorId("tfl", busOperator));
+    assert(busOperator == transitink::BusOperator::Tfl);
 
     transitink::RailMode railMode;
     assert(std::string(transitink::railModeId(transitink::RailMode::HeavyRail)) == "heavy_rail");
     assert(std::string(transitink::railModeId(transitink::RailMode::LightRail)) == "light_rail");
+    assert(std::string(transitink::railModeId(transitink::RailMode::LondonRail)) ==
+           "london_rail");
     assert(transitink::parseRailModeId("light_rail", railMode));
     assert(railMode == transitink::RailMode::LightRail);
+    assert(transitink::parseRailModeId("london_rail", railMode));
+    assert(railMode == transitink::RailMode::LondonRail);
     assert(!transitink::parseRailModeId("unknown", railMode));
 
     transitink::WidgetConfig busWidget;
@@ -56,6 +77,11 @@ int main() {
     busWidget.bus.directionId = "O";
     busWidget.bus.serviceType = "1";
     busWidget.bus.stopId = "STOP-A";
+    assert(transitink::isWidgetConfigValid(busWidget));
+    busWidget.bus.operatorId = transitink::BusOperator::Tfl;
+    busWidget.bus.directionId = "inbound";
+    busWidget.bus.serviceType = "490012280A|490015832E";
+    busWidget.bus.stopId = "490000089A";
     assert(transitink::isWidgetConfigValid(busWidget));
 
     transitink::WidgetConfig gmbWidget;

@@ -17,8 +17,10 @@ public:
     bool fetchCurrentWeather(const String& locationTc, WeatherSnapshot& snapshot, String& error);
 
 private:
-    bool httpGet(const String& url, String& body, String& error);
+    bool httpGet(const String& url, bool useOpenMeteoTrust,
+                 String& body, String& error);
 };
 
 String weatherDisplayText(const WeatherSnapshot& snapshot);
 String weatherConditionText(int icon);
+String openMeteoWeatherConditionText(int weatherCode);

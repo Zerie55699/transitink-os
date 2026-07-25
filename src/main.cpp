@@ -21,9 +21,11 @@
 #include "LightRailClient.h"
 #include "MtrClient.h"
 #include "ProductConfig.h"
+#include "TflClient.h"
 #include "WeatherClient.h"
 #include "WidgetCatalogService.h"
 #include "core/BusEtaCore.h"
+#include "core/UiText.h"
 #include "core/WidgetScheduler.h"
 #include "hardware/BoardProfile.h"
 #include "hardware/BoardSupport.h"
@@ -32,26 +34,33 @@
 #include "providers/JourneyTimeProvider.h"
 #include "providers/LightRailProvider.h"
 #include "providers/MtrProvider.h"
+#include "providers/TflRailProvider.h"
 #include "providers/WidgetProviderRouter.h"
+
+SET_LOOP_TASK_STACK_SIZE(16 * 1024);
 
 ConfigStore configStore;
 BatteryMonitor chargeMonitor;
 DeviceConfig deviceConfig;
 KmbClient kmbClient;
 CitybusClient citybusClient;
+TflClient tflClient;
 GmbClient gmbClient;
 MtrClient mtrClient;
 LightRailClient lightRailClient;
 JourneyTimeClient journeyTimeClient;
-BusProvider busProvider(kmbClient, citybusClient);
+BusProvider busProvider(kmbClient, citybusClient, tflClient);
 GmbProvider gmbProvider(gmbClient);
 MtrProvider mtrProvider(mtrClient);
 LightRailProvider lightRailProvider(lightRailClient);
+TflRailProvider tflRailProvider(tflClient);
 JourneyTimeProvider journeyTimeProvider(journeyTimeClient);
 WidgetProviderRouter widgetProviderRouter(
-    busProvider, gmbProvider, mtrProvider, lightRailProvider, journeyTimeProvider);
+    busProvider, gmbProvider, mtrProvider, lightRailProvider, tflRailProvider,
+    journeyTimeProvider);
 transitink::WidgetScheduler widgetScheduler(widgetProviderRouter);
-WidgetCatalogService widgetCatalogService(kmbClient, citybusClient, gmbClient);
+WidgetCatalogService widgetCatalogService(kmbClient, citybusClient, gmbClient,
+                                          tflClient);
 WeatherClient weatherClient;
 WeatherSnapshot weatherSnapshot;
 EInkDisplay einkDisplay;
@@ -70,6 +79,7 @@ bool sleepMaintenanceWake = false;
 bool scheduledWakeSession = false;
 bool sleepScreenPrepared = false;
 bool chargeStatusLogged = false;
+RTC_DATA_ATTR uint8_t activeWidgetPage = 0;
 enum class HomeWakeRefreshPhase : uint8_t {
     Idle,
     ConnectingWifi,
@@ -88,6 +98,7 @@ RTC_NOINIT_ATTR uint32_t sleepResumeMarkerInverse;
 
 void serviceFactoryResetButtons();
 void serviceConfigButton();
+void serviceWidgetPageButton();
 void setupFactoryResetButtons();
 void showConfigAccessScreen();
 void returnToDashboard();
@@ -98,9 +109,13 @@ void startHomeWakeRefresh();
 void serviceHomeWakeRefresh();
 void finishHomeWakeRefresh();
 bool homeWakeRefreshActive();
-transitink::WidgetSnapshotSet currentDisplaySnapshots();
-transitink::WidgetSnapshotSet homeWakeLoadingSnapshots();
+transitink::WidgetPageSnapshotSet currentDisplaySnapshots();
+transitink::WidgetPageSnapshotSet homeWakeLoadingSnapshots();
+transitink::WidgetPageSnapshotSet pageSwitchSnapshots();
+uint8_t dashboardPageCount();
 bool hasValidTime();
+void applyConfiguredTimeZone();
+void configureNetworkTime();
 void syncTimeAndWeatherBeforeDashboard(bool homeWake);
 bus_eta::SleepSettings sleepSettingsFromConfig();
 bool scheduledWakeWindowActiveNow();
@@ -122,6 +137,15 @@ String configApSsid() {
     char suffix[7];
     snprintf(suffix, sizeof(suffix), "%06X", static_cast<unsigned int>(mac & 0xFFFFFF));
     return String(CONFIG_AP_PREFIX) + "-" + suffix;
+}
+
+String configAccessPointMessage(const String& configUrl) {
+    return String(transitink::uiText(transitink::UiTextId::PasswordLabel)) +
+           configPortal.apPassword() + "\n" +
+           transitink::uiText(
+               transitink::UiTextId::ConnectPhoneToWifi) +
+           "\n" +
+           transitink::uiText(transitink::UiTextId::OpenAddress) + configUrl;
 }
 
 bool connectWifi(const DeviceConfig& config) {
@@ -163,8 +187,18 @@ bool hasValidTime() {
     return time(nullptr) >= 1700000000;
 }
 
+void applyConfiguredTimeZone() {
+    setenv("TZ", transitink::devicePosixTimeZone(deviceConfig.timeZone), 1);
+    tzset();
+}
+
+void configureNetworkTime() {
+    configTzTime(transitink::devicePosixTimeZone(deviceConfig.timeZone),
+                 "pool.ntp.org", "time.cloudflare.com", "time.nist.gov");
+}
+
 void syncTimeAndWeatherBeforeDashboard(bool homeWake) {
-    configTzTime("HKT-8", "pool.ntp.org", "time.cloudflare.com", "time.nist.gov");
+    configureNetworkTime();
     if (homeWake) {
         if (!hasValidTime()) {
             waitForTimeSync(2000);
@@ -206,7 +240,8 @@ void refreshWeatherNow() {
     Serial.println("Weather refresh start");
     if (WiFi.status() != WL_CONNECTED) {
         weatherSnapshot.valid = false;
-        weatherSnapshot.error = "Wi-Fi 未連接";
+        weatherSnapshot.error =
+            transitink::uiText(transitink::UiTextId::WifiDisconnected);
         scheduleNextWeatherRefresh(60);
         if (dashboardVisible) {
             einkDisplay.refreshWeatherFooter(currentDisplaySnapshots(), weatherSnapshot);
@@ -228,13 +263,14 @@ void refreshWeatherNow() {
     }
 }
 
-transitink::WidgetSnapshotSet currentDisplaySnapshots() {
+transitink::WidgetPageSnapshotSet currentDisplaySnapshots() {
     const int64_t nowEpoch = hasValidTime() ? static_cast<int64_t>(time(nullptr)) : 0;
-    return widgetScheduler.displaySnapshots(nowEpoch);
+    return transitink::snapshotsForWidgetPage(
+        widgetScheduler.displaySnapshots(nowEpoch), activeWidgetPage);
 }
 
-transitink::WidgetSnapshotSet homeWakeLoadingSnapshots() {
-    transitink::WidgetSnapshotSet snapshots = currentDisplaySnapshots();
+transitink::WidgetPageSnapshotSet homeWakeLoadingSnapshots() {
+    transitink::WidgetPageSnapshotSet snapshots = currentDisplaySnapshots();
     for (auto& snapshot : snapshots) {
         if (snapshot.type == transitink::WidgetType::Disabled) {
             continue;
@@ -242,7 +278,8 @@ transitink::WidgetSnapshotSet homeWakeLoadingSnapshots() {
         snapshot.values = {};
         snapshot.valueCount = 0;
         snapshot.state = transitink::WidgetState::Empty;
-        snapshot.providerMessage = "正在更新...";
+        snapshot.providerMessage =
+            transitink::uiText(transitink::UiTextId::Updating);
         snapshot.fetchedAtEpoch = 0;
         snapshot.dataAtEpoch = 0;
         snapshot.freshness = transitink::Freshness::Fresh;
@@ -251,17 +288,31 @@ transitink::WidgetSnapshotSet homeWakeLoadingSnapshots() {
     return snapshots;
 }
 
+transitink::WidgetPageSnapshotSet pageSwitchSnapshots() {
+    const int64_t nowEpoch =
+        hasValidTime() ? static_cast<int64_t>(time(nullptr)) : 0;
+    return widgetScheduler.pageSwitchSnapshots(
+        nowEpoch, WIDGET_PAGE_CACHE_TTL_SECONDS);
+}
+
+uint8_t dashboardPageCount() {
+    return transitink::enabledWidgetPageCount(deviceConfig.widgets) > 1
+               ? static_cast<uint8_t>(transitink::kWidgetPageCount)
+               : 1;
+}
+
 void refreshAllWidgetsNow() {
-    Serial.println("Widget refresh all start");
+    Serial.println("Widget refresh active page start");
     const uint32_t nowMs = millis();
     const int64_t nowEpoch = hasValidTime() ? static_cast<int64_t>(time(nullptr)) : 0;
-    widgetScheduler.forceAllDue(nowMs);
+    widgetScheduler.forceActivePageDue(nowMs);
     for (std::size_t attempts = 0;
-         attempts < transitink::kWidgetSlotCount && widgetScheduler.hasPendingDue(nowMs);
+         attempts < transitink::kWidgetsPerPage && widgetScheduler.hasPendingDue(nowMs);
          ++attempts) {
         widgetScheduler.serviceNextDue(nowMs, nowEpoch);
     }
-    einkDisplay.showDashboard(currentDisplaySnapshots(), weatherSnapshot);
+    einkDisplay.showDashboard(currentDisplaySnapshots(), weatherSnapshot,
+                              activeWidgetPage, dashboardPageCount());
     dashboardVisible = true;
     scheduleNextClockRefresh();
 }
@@ -276,7 +327,13 @@ void serviceOneWidgetIfDue() {
     if (!tick.ran) {
         return;
     }
-    einkDisplay.refreshWidgetLane(tick.slot, currentDisplaySnapshots(), weatherSnapshot);
+    const std::size_t pageStart = transitink::widgetPageStart(activeWidgetPage);
+    if (tick.slot < pageStart ||
+        tick.slot >= pageStart + transitink::kWidgetsPerPage) {
+        return;
+    }
+    const uint8_t lane = static_cast<uint8_t>(tick.slot - pageStart);
+    einkDisplay.refreshWidgetLane(lane, currentDisplaySnapshots(), weatherSnapshot);
 }
 
 bool homeWakeRefreshActive() {
@@ -296,14 +353,16 @@ void startHomeWakeRefresh() {
     Serial.println("Home wake: restore dashboard before network refresh");
     wakeStartedAtMs = millis();
     homeWakeWidgetAttempts = 0;
-    widgetScheduler.forceAllDue(wakeStartedAtMs);
-    einkDisplay.showDashboard(homeWakeLoadingSnapshots(), weatherSnapshot);
+    widgetScheduler.forceActivePageDue(wakeStartedAtMs);
+    einkDisplay.showDashboard(homeWakeLoadingSnapshots(), weatherSnapshot,
+                              activeWidgetPage, dashboardPageCount());
     dashboardVisible = true;
     scheduleNextClockRefresh();
 
     if (deviceConfig.wifiSsid.isEmpty()) {
         weatherSnapshot.valid = false;
-        weatherSnapshot.error = "Wi-Fi 未連接";
+        weatherSnapshot.error =
+            transitink::uiText(transitink::UiTextId::WifiDisconnected);
         scheduleNextWeatherRefresh(60);
         homeWakeRefreshPhase = HomeWakeRefreshPhase::Weather;
         finishHomeWakeRefresh();
@@ -325,7 +384,7 @@ void serviceHomeWakeRefresh() {
         case HomeWakeRefreshPhase::ConnectingWifi:
             if (WiFi.status() == WL_CONNECTED) {
                 Serial.println("Home wake: Wi-Fi connected");
-                configTzTime("HKT-8", "pool.ntp.org", "time.cloudflare.com", "time.nist.gov");
+                configureNetworkTime();
                 homeWakePhaseStartedMs = nowMs;
                 homeWakeRefreshPhase = HomeWakeRefreshPhase::WaitingForTime;
                 return;
@@ -333,7 +392,9 @@ void serviceHomeWakeRefresh() {
             if (nowMs - homeWakePhaseStartedMs >= kHomeWakeWifiTimeoutMs) {
                 Serial.println("Home wake: Wi-Fi connection timed out");
                 weatherSnapshot.valid = false;
-                weatherSnapshot.error = "Wi-Fi 未連接";
+                weatherSnapshot.error =
+                    transitink::uiText(
+                        transitink::UiTextId::WifiDisconnected);
                 scheduleNextWeatherRefresh(60);
                 finishHomeWakeRefresh();
             }
@@ -351,7 +412,7 @@ void serviceHomeWakeRefresh() {
                 homeWakeRefreshPhase = HomeWakeRefreshPhase::ConnectingWifi;
                 return;
             }
-            if (homeWakeWidgetAttempts < static_cast<uint8_t>(transitink::kWidgetSlotCount) &&
+            if (homeWakeWidgetAttempts < static_cast<uint8_t>(transitink::kWidgetsPerPage) &&
                 widgetScheduler.hasPendingDue(nowMs)) {
                 ++homeWakeWidgetAttempts;
                 serviceOneWidgetIfDue();
@@ -484,11 +545,14 @@ void performLightSleepMaintenance() {
         syncTimeAndWeatherBeforeDashboard(false);
     } else {
         weatherSnapshot.valid = false;
-        weatherSnapshot.error = "Wi-Fi 未連接";
+        weatherSnapshot.error =
+            transitink::uiText(transitink::UiTextId::WifiDisconnected);
         scheduleNextWeatherRefresh(60);
     }
     stopNetworkForSleep();
-    einkDisplay.refreshSleepStatusAndWeather(currentDisplaySnapshots(), weatherSnapshot);
+    einkDisplay.refreshSleepStatusAndWeather(
+        currentDisplaySnapshots(), weatherSnapshot, activeWidgetPage,
+        dashboardPageCount());
     einkDisplay.prepareForSleep();
     sleepScreenPrepared = true;
 }
@@ -504,7 +568,8 @@ void enterSleepMode(const char* reason) {
         transitink::hardware::clearPendingHomePress();
         dashboardVisible = false;
         configAccessMode = false;
-        einkDisplay.showSleep(currentDisplaySnapshots(), weatherSnapshot);
+        einkDisplay.showSleep(currentDisplaySnapshots(), weatherSnapshot,
+                              activeWidgetPage, dashboardPageCount());
         stopNetworkForSleep();
         einkDisplay.prepareForSleep();
     }
@@ -585,7 +650,10 @@ void applyFactoryReset() {
     if (LittleFS.begin(true)) {
         LittleFS.format();
     }
-    einkDisplay.showWifiStatus("已重設裝置\n放開音量鍵後重啟");
+    einkDisplay.showWifiStatus(
+        String(transitink::uiText(transitink::UiTextId::ResetComplete)) +
+        "\n" +
+        transitink::uiText(transitink::UiTextId::ReleaseVolumeRestart));
 }
 
 void serviceFactoryResetButtons() {
@@ -612,13 +680,20 @@ void showConfigAccessScreen() {
     dashboardVisible = false;
     const String configUrl = configPortal.pageUrl();
     if (configPortal.isApMode()) {
-        const String message = "密碼：" + configPortal.apPassword() +
-                               "\n開啟 " + configUrl;
-        einkDisplay.showConfigMode(configApSsid(), message, configUrl);
+        const String message = configAccessPointMessage(configUrl);
+        einkDisplay.showConfigMode(configApSsid(), message);
         return;
     }
-    const String localUrl = "http://" + WiFi.localIP().toString() + "/";
-    const String message = "本機設定頁\n" + localUrl;
+    String displayedConfigUrl = configUrl;
+    const int accessPathStart = displayedConfigUrl.lastIndexOf('/') + 1;
+    if (accessPathStart > 0 && accessPathStart < displayedConfigUrl.length()) {
+        displayedConfigUrl =
+            displayedConfigUrl.substring(0, accessPathStart) + "\n" +
+            displayedConfigUrl.substring(accessPathStart);
+    }
+    const String message =
+        String(transitink::uiText(transitink::UiTextId::LocalSettings)) +
+        "\n" + displayedConfigUrl;
     einkDisplay.showConfigMode(deviceConfig.wifiSsid, message, configUrl);
 }
 
@@ -647,6 +722,31 @@ void serviceConfigButton() {
         showConfigAccessScreen();
     }
     transitink::hardware::clearPendingConfigClick();
+}
+
+void serviceWidgetPageButton() {
+    if (!transitink::hardware::takeWidgetPageClick() ||
+        factoryResetPendingRestart) {
+        return;
+    }
+    if (configAccessMode || !dashboardVisible) {
+        transitink::hardware::clearPendingWidgetPageClick();
+        return;
+    }
+
+    const std::size_t nextPage =
+        transitink::nextEnabledWidgetPage(deviceConfig.widgets, activeWidgetPage);
+    if (nextPage == activeWidgetPage ||
+        !widgetScheduler.setActivePage(nextPage, millis())) {
+        return;
+    }
+
+    activeWidgetPage = static_cast<uint8_t>(nextPage);
+    homeWakeWidgetAttempts = 0;
+    Serial.print("Widget page changed to: ");
+    Serial.println(static_cast<unsigned int>(activeWidgetPage) + 1);
+    einkDisplay.showDashboard(pageSwitchSnapshots(), weatherSnapshot,
+                              activeWidgetPage, dashboardPageCount());
 }
 
 void serviceChargeStatus(bool force) {
@@ -683,8 +783,7 @@ void serviceChargeStatus(bool force) {
 void setup() {
     Serial.begin(115200);
     delay(200);
-    setenv("TZ", "HKT-8", 1);
-    tzset();
+    applyConfiguredTimeZone();
     const esp_sleep_wakeup_cause_t wakeCause = esp_sleep_get_wakeup_cause();
     const esp_reset_reason_t resetReason = esp_reset_reason();
     setupFactoryResetButtons();
@@ -719,6 +818,13 @@ void setup() {
     einkDisplay.begin(false);
 
     bool loaded = configStore.load(deviceConfig);
+    if (loaded && transitink::isUiLocaleSupported(deviceConfig.uiLocale)) {
+        transitink::setUiLocale(deviceConfig.uiLocale);
+    }
+    if (loaded &&
+        transitink::isDeviceTimeZoneSupported(deviceConfig.timeZone)) {
+        applyConfiguredTimeZone();
+    }
     Serial.print("Config loaded: ");
     Serial.println(loaded ? "yes" : "no");
     if (!loaded || !hasUsableConfig(deviceConfig)) {
@@ -728,13 +834,17 @@ void setup() {
         const String configUrl = configPortal.pageUrl();
         einkDisplay.showConfigMode(
             configApSsid(),
-            String("密碼：") + configPortal.apPassword() +
-                "\n開啟 " + configUrl,
-            configUrl);
+            configAccessPointMessage(configUrl));
         return;
     }
 
     widgetScheduler.configure(deviceConfig.widgets, millis());
+    if (!transitink::widgetPageHasEnabled(deviceConfig.widgets,
+                                          activeWidgetPage)) {
+        activeWidgetPage = static_cast<uint8_t>(
+            transitink::firstEnabledWidgetPage(deviceConfig.widgets));
+    }
+    widgetScheduler.setActivePage(activeWidgetPage, millis());
 
     if (deviceConfig.sleepEnabled && sleepMaintenanceWake) {
         if (deviceConfig.scheduledWakeEnabled) {
@@ -777,7 +887,8 @@ void setup() {
         syncTimeAndWeatherBeforeDashboard(false);
     } else {
         weatherSnapshot.valid = false;
-        weatherSnapshot.error = "Wi-Fi 未連接";
+        weatherSnapshot.error =
+            transitink::uiText(transitink::UiTextId::WifiDisconnected);
         scheduleNextWeatherRefresh(60);
     }
 
@@ -795,6 +906,7 @@ void loop() {
     }
     configPortal.loop();
     serviceConfigButton();
+    serviceWidgetPageButton();
     if (configAccessMode) {
         delay(5);
         return;

@@ -3,6 +3,7 @@
 #include <ArduinoJson.h>
 #include <WiFi.h>
 #include <esp_system.h>
+#include <time.h>
 
 #include "ProductConfig.h"
 #include "PortalConfigCodec.h"
@@ -121,6 +122,10 @@ void ConfigPortal::registerRoutes() {
                [this]() { if (authorizePortalRequest(true)) saveConfig(); });
     server_.on("/api/wifi", HTTP_GET,
                [this]() { if (authorizePortalRequest(false)) scanWifiNetworks(); });
+    server_.on("/api/wifi/connect", HTTP_POST,
+               [this]() { if (authorizePortalRequest(true)) connectWifiForSetup(); });
+    server_.on("/api/wifi/status", HTTP_GET,
+               [this]() { if (authorizePortalRequest(false)) sendSetupWifiStatus(); });
     server_.on("/api/catalog/bus/routes", HTTP_GET,
                [this]() { if (authorizePortalRequest(false)) listBusRoutes(); });
     server_.on("/api/catalog/bus/directions", HTTP_GET,
@@ -151,6 +156,8 @@ void ConfigPortal::registerRoutes() {
                [this]() { if (authorizePortalRequest(false)) serveEmbeddedCatalog("stops-ctb.json"); });
     server_.on("/assets/catalog/current/stops-gmb.json", HTTP_GET,
                [this]() { if (authorizePortalRequest(false)) serveEmbeddedCatalog("stops-gmb.json"); });
+    server_.on("/assets/catalog/current/stops-tfl.json", HTTP_GET,
+               [this]() { if (authorizePortalRequest(false)) serveEmbeddedCatalog("stops-tfl.json"); });
     server_.on("/assets/catalog/current/rail.json", HTTP_GET,
                [this]() { if (authorizePortalRequest(false)) serveEmbeddedCatalog("rail.json"); });
     server_.on("/api/catalog/route-index", HTTP_GET,
@@ -285,10 +292,13 @@ void ConfigPortal::saveConfig() {
 }
 
 void ConfigPortal::scanWifiNetworks() {
+    const wifi_mode_t wifiMode = WiFi.getMode();
+    const bool keepStationEnabled =
+        wifiMode == WIFI_STA || wifiMode == WIFI_AP_STA;
     const int count = WiFi.scanNetworks(false, true);
     if (count < 0) {
         WiFi.scanDelete();
-        if (apMode_) WiFi.enableSTA(false);
+        if (apMode_ && !keepStationEnabled) WiFi.enableSTA(false);
         sendText(500, "text/plain; charset=utf-8", "Wi-Fi 掃描失敗");
         return;
     }
@@ -316,9 +326,65 @@ void ConfigPortal::scanWifiNetworks() {
         item["secure"] = WiFi.encryptionType(index) != WIFI_AUTH_OPEN;
     }
     WiFi.scanDelete();
-    if (apMode_) WiFi.enableSTA(false);
+    if (apMode_ && !keepStationEnabled) WiFi.enableSTA(false);
     String json;
     serializeJson(doc, json);
+    sendText(200, "application/json; charset=utf-8", json);
+}
+
+void ConfigPortal::connectWifiForSetup() {
+    if (!transitink::isPortalSaveAuthorized(
+            server_.header("Content-Type").c_str(),
+            server_.header("X-TransitInk-CSRF").c_str(),
+            csrfToken_.c_str())) {
+        sendText(403, "text/plain; charset=utf-8", "Wi-Fi 連線要求驗證失敗");
+        return;
+    }
+    if (!apMode_) {
+        sendText(200, "application/json; charset=utf-8",
+                 R"({"started":true})");
+        return;
+    }
+
+    StaticJsonDocument<256> request;
+    const DeserializationError parseError =
+        deserializeJson(request, server_.arg("plain"));
+    if (parseError || !request.is<JsonObject>() ||
+        !request["wifi_ssid"].is<const char*>() ||
+        (!request["wifi_password"].isNull() &&
+         !request["wifi_password"].is<const char*>())) {
+        sendText(400, "text/plain; charset=utf-8", "Wi-Fi 連線資料格式不正確");
+        return;
+    }
+
+    const String ssid = request["wifi_ssid"].as<const char*>();
+    String password = request["wifi_password"] | "";
+    if (password.isEmpty() && ssid == config_.wifiSsid) {
+        password = config_.wifiPassword;
+    }
+    if (ssid.isEmpty() || ssid.length() > transitink::kMaxWifiSsidBytes ||
+        password.length() > transitink::kMaxWifiCredentialBytes) {
+        sendText(400, "text/plain; charset=utf-8", "Wi-Fi 名稱或密碼格式不正確");
+        return;
+    }
+
+    WiFi.enableSTA(true);
+    WiFi.begin(ssid.c_str(), password.c_str());
+    configTzTime(transitink::devicePosixTimeZone(config_.timeZone),
+                 "pool.ntp.org", "time.cloudflare.com", "time.nist.gov");
+    sendText(202, "application/json; charset=utf-8",
+             R"({"started":true})");
+}
+
+void ConfigPortal::sendSetupWifiStatus() {
+    constexpr time_t kMinimumValidEpoch = 1700000000;
+    const bool connected = WiFi.status() == WL_CONNECTED;
+    const bool timeReady = connected && time(nullptr) >= kMinimumValidEpoch;
+    StaticJsonDocument<96> response;
+    response["connected"] = connected;
+    response["ready"] = timeReady;
+    String json;
+    serializeJson(response, json);
     sendText(200, "application/json; charset=utf-8", json);
 }
 

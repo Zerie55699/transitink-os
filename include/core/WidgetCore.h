@@ -33,8 +33,11 @@ struct WidgetSnapshot {
 };
 
 using WidgetSnapshotSet = std::array<WidgetSnapshot, kWidgetSlotCount>;
+using WidgetPageSnapshotSet = std::array<WidgetSnapshot, kWidgetsPerPage>;
 
 WidgetSnapshot configuredWidgetSnapshot(uint8_t slot, const WidgetConfig& config);
+WidgetPageSnapshotSet snapshotsForWidgetPage(const WidgetSnapshotSet& snapshots,
+                                             std::size_t page);
 
 struct ProviderResult {
     ProviderOutcome outcome;
@@ -47,16 +50,19 @@ struct BusEtaRecord {
     int64_t eventEpoch = 0;
     std::string destinationLabelTc, remarkTc;
     bool cancelled = false;
+    std::string destinationLabelEn{}, remarkEn{};
 };
 
 struct GmbEtaRecord {
     int32_t diffMinutes = -1;
     std::string remarkTc;
+    std::string remarkEn{};
 };
 
 struct GmbEtaPayload {
     bool enabled = true;
     std::string descriptionTc;
+    std::string descriptionEn{};
     std::vector<GmbEtaRecord> records;
 };
 
@@ -67,6 +73,7 @@ struct RailArrivalRecord {
     std::string destinationLabelTc, platformLabelTc, messageTc;
     bool cancelled = false;
     bool valid = true;
+    std::string destinationLabelEn{}, platformLabelEn{}, messageEn{};
 };
 
 enum class JourneyTimeValueKind : uint8_t { Minutes, Status, Unavailable };
@@ -82,9 +89,12 @@ struct JourneyTimeRecord {
 };
 
 uint32_t refreshIntervalMs(WidgetType type);
+uint32_t refreshIntervalMs(const WidgetConfig& config);
 uint32_t staleWindowSeconds(WidgetType type);
+uint32_t staleWindowSeconds(const WidgetConfig& config);
 bool deadlineReached(uint32_t nowMs, uint32_t deadlineMs);
 void removeExpiredValues(WidgetSnapshot& snapshot, int64_t nowEpoch);
+std::string displayStopLabel(std::string label);
 std::string displayStopLabelTc(std::string label);
 
 ProviderResult normalizeBusSnapshot(uint8_t slot,

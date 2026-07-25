@@ -35,6 +35,7 @@ class HardwareArchitectureTests(unittest.TestCase):
             "homeButtonPressed()",
             "startButtonMonitoring()",
             "takeConfigClick()",
+            "takeWidgetPageClick()",
             "takeFactoryResetHold()",
             "factoryResetUpButtonPressed()",
             "factoryResetDownButtonPressed()",

@@ -2,7 +2,8 @@
 
 TransitInk OS is an ESP32-S3 firmware for a 400×300 e-paper transit dashboard,
 developed for the Zectrix Note 4 hardware profile. It displays four independently
-configured widgets and includes an on-device Traditional Chinese settings portal.
+configured widgets and includes an on-device Traditional Chinese and English
+settings portal.
 
 ## Zectrix Note 4 demo
 
@@ -14,9 +15,10 @@ Zectrix and its product names remain the property of their respective owner.
 
 Supported widgets:
 
-- Bus ETA for KMB, Long Win Bus, and Citybus
+- Bus ETA for KMB, Long Win Bus, Citybus, and London buses through TfL Open Data
 - Green Minibus ETA for Hong Kong Island, Kowloon, and the New Territories
-- MTR ETA for heavy rail and Light Rail
+- MTR, Light Rail, London Underground, DLR, London Overground, Elizabeth line,
+  and London Trams ETA
 - Transport Department journey-time indicators
 
 Original TransitInk OS source code is licensed for noncommercial purposes under
@@ -67,9 +69,9 @@ the board, flash size, and serial port before running either operation.
 When no valid settings exist, the device starts a WPA2-protected
 `TransitInk-xxxx` Wi-Fi access point. Its randomly generated password is shown
 on the device. Connect to it, open `http://192.168.4.1/`, enter the Wi-Fi
-settings, and configure four ordered widget slots. A slot may also be disabled.
-The settings access point remains available until setup is saved or the device
-is restarted.
+settings, and configure up to twelve widget slots across three pages. Each page
+contains four ordered positions, and a position may be disabled. The settings
+access point remains available until setup is saved or the device is restarted.
 
 After the device has joined its configured Wi-Fi, pressing the Volume button
 opens the settings portal on the device's current LAN IP instead of creating the
@@ -79,10 +81,19 @@ the device is restarted, or Volume is pressed again. If normal Wi-Fi is
 unavailable, the device falls back to the protected `TransitInk-xxxx` access
 point.
 
-TransitInk OS refreshes MTR every 30 seconds, bus and Green Minibus arrivals
-every 60 seconds, and journey time every 120 seconds. Green Minibus setup uses
-the official region, route, direction/variation, and stop identifiers. The
-firmware migrates supported legacy route settings into the four-slot
+On the dashboard, Volume Down cycles through pages that contain at least one
+configured widget. Empty pages are skipped. Only the visible page refreshes in
+the background, so adding another page does not continuously fetch every
+configured widget.
+
+TransitInk OS refreshes MTR, London rail, and London bus arrivals every 30
+seconds, Hong Kong bus and Green Minibus arrivals every 60 seconds, and journey
+time every 120 seconds. Green Minibus setup uses the official region, route,
+direction/variation, and stop identifiers. London bus setup accepts a TfL route
+number and resolves its direction and stop from the firmware's bundled
+catalogue. London rail lines and stations are bundled as well; live arrivals
+are filtered by the selected line, station, and direction. The firmware
+migrates supported legacy route settings into the first page of the three-page
 configuration.
 
 Power settings include an optional daily awake window, defaulting to 08:00–09:00
@@ -93,20 +104,23 @@ avoid extra battery use, periodic sleeping maintenance wakes are disabled while
 the daily window is enabled. The schedule requires the device clock to have
 been synchronized over Wi-Fi at least once since power-on.
 
-The settings portal reads its bus, Green Minibus, MTR, and Light Rail route and
-stop directories from a versioned catalog embedded in the firmware. It remains
-usable without Internet access; only ETA refreshes are live. Maintainers refresh
-the catalog explicitly with:
+The settings portal reads its Hong Kong and London bus and rail route and stop
+directories from a versioned catalogue embedded in the firmware. Setup remains
+available offline after a factory reset. Live ETA and explicit refreshes for a
+new route still require Internet access; refreshed route overrides are saved in
+LittleFS. Maintainers refresh the complete bundled catalogue explicitly with:
 
 ```bash
 .venv/bin/python scripts/generate_transit_route_catalog.py --refresh
 ```
 
+A TfL-only maintainer refresh is also available with `--refresh-tfl`.
+
 Normal builds never contact a transport provider. A public release needs no
 external catalog host: if a user cannot find a new route or stop, the
-"更新及省電" page offers "找不到站牌？更新所有路線". The device refreshes the
+"設定" page offers "找不到站牌？更新所有路線". The device refreshes the
 complete KMB/Long Win, Citybus, and Green Minibus route indexes, then refreshes
-the routes currently used by the four widget drafts. Other routes fetch their
+the routes currently used by the configured widget drafts. Other routes fetch their
 stop detail once when first selected after an index update. Updated indexes and
 route overrides are written atomically to LittleFS and reused on later visits. See
 [Third-party data](THIRD_PARTY_DATA.md) for source attribution and

@@ -12,7 +12,7 @@ class ConfigStructureTests(unittest.TestCase):
         cls.header = (ROOT / "include/AppConfig.h").read_text()
         cls.store = (ROOT / "src/ConfigStore.cpp").read_text()
 
-    def test_version_2_writer_and_legacy_reader_contract(self):
+    def test_version_3_writer_and_legacy_readers_contract(self):
         source = self.source
         store = self.store
         self.assertIn('doc["schema_version"] = transitink::kConfigSchemaVersion', source)
@@ -23,7 +23,9 @@ class ConfigStructureTests(unittest.TestCase):
         self.assertNotIn('doc.createNestedArray("routes")', source)
         self.assertNotIn("TRANSITINK_LEGACY_COMPAT", self.header)
         self.assertIn('preferences_.begin("bus_eta", false)', store)
-        self.assertIn('preferences_.putString("config"', store)
+        self.assertIn('preferences_.putBytes(kConfigBlobKey', store)
+        self.assertIn('preferences_.getString(kLegacyConfigStringKey', store)
+        self.assertIn("preferences_.getBytesLength(kConfigBlobKey)", store)
         self.assertIn('preferences_.getBool("sleep_resume", false)', store)
         self.assertIn('preferences_.putBool("sleep_resume", pending)', store)
         self.assertIn("if (sleepResumePending() == pending)", store)
@@ -34,6 +36,10 @@ class ConfigStructureTests(unittest.TestCase):
         self.assertNotIn("String stopNameTc;", self.header)
         self.assertNotIn("uint16_t refreshSeconds", self.header)
         self.assertNotIn("std::vector<bus_eta::RouteSelection> routes", self.header)
+        widget_header = (ROOT / "include/core/WidgetConfigCore.h").read_text()
+        self.assertIn("kWidgetPageCount = 3", widget_header)
+        self.assertIn("kWidgetsPerPage = 4", widget_header)
+        self.assertIn("kConfigSchemaVersion = 3", widget_header)
 
     def test_legacy_reader_migrates_directly_to_widget_slots(self):
         source = self.source
@@ -108,11 +114,17 @@ class PortalCatalogStructureTests(unittest.TestCase):
     def test_device_clients_use_official_provider_sources(self):
         sources = "".join(
             (ROOT / path).read_text()
-            for path in ("src/core/BusEtaCore.cpp", "src/CitybusClient.cpp", "src/GmbClient.cpp")
+            for path in (
+                "src/core/BusEtaCore.cpp",
+                "src/CitybusClient.cpp",
+                "src/GmbClient.cpp",
+                "src/TflClient.cpp",
+            )
         )
         self.assertIn("data.etabus.gov.hk", sources)
         self.assertIn("rt.data.gov.hk", sources)
         self.assertIn("data.etagmb.gov.hk", sources)
+        self.assertIn("api.tfl.gov.uk", sources)
 
     def test_manual_refresh_writes_one_atomic_route_override(self):
         source = (ROOT / "src/WidgetCatalogService.cpp").read_text()
@@ -168,7 +180,12 @@ class ThinConfigPortalStructureTests(unittest.TestCase):
         for endpoint in endpoints:
             self.assertEqual(source.count(f'server_.on("{endpoint}"'), 1)
         self.assertIn('server_.on("/api/wifi"', source)
-        for asset in ("index", "stops-kmb", "stops-ctb", "stops-gmb", "rail"):
+        self.assertEqual(source.count('server_.on("/api/wifi/connect"'), 1)
+        self.assertEqual(source.count('server_.on("/api/wifi/status"'), 1)
+        for asset in (
+            "index", "stops-kmb", "stops-ctb", "stops-gmb",
+            "stops-tfl", "rail",
+        ):
             self.assertIn(f'/assets/catalog/current/{asset}.json', source)
         self.assertIn('server_.sendHeader("Content-Encoding", "gzip")', source)
         self.assertIn('strcmp(assetPath, "index.json") == 0', source)
@@ -179,6 +196,35 @@ class ThinConfigPortalStructureTests(unittest.TestCase):
         self.assertNotIn("proxyRoutes", source)
         self.assertNotIn("proxyStops", source)
         self.assertNotIn("proxyRouteStops", source)
+
+    def test_first_setup_can_join_wifi_without_stopping_the_portal_ap(self):
+        source = (ROOT / "src/ConfigPortal.cpp").read_text()
+        connect = source.split(
+            "void ConfigPortal::connectWifiForSetup()", 1
+        )[1].split("void ConfigPortal::sendSetupWifiStatus()", 1)[0]
+        status = source.split(
+            "void ConfigPortal::sendSetupWifiStatus()", 1
+        )[1].split("void ConfigPortal::sendCatalogResult", 1)[0]
+        scan = source.split("void ConfigPortal::scanWifiNetworks()", 1)[1].split(
+            "void ConfigPortal::connectWifiForSetup()", 1
+        )[0]
+        self.assertIn("isPortalSaveAuthorized", connect)
+        self.assertLess(
+            connect.index("isPortalSaveAuthorized"),
+            connect.index('server_.arg("plain")'),
+        )
+        self.assertIn("WiFi.enableSTA(true)", connect)
+        self.assertIn("WiFi.begin(ssid.c_str(), password.c_str())", connect)
+        self.assertIn("configTzTime", connect)
+        self.assertNotIn("WiFi.mode(WIFI_STA)", connect)
+        self.assertNotIn("WiFi.softAPdisconnect", connect)
+        self.assertIn("WiFi.status() == WL_CONNECTED", status)
+        self.assertIn("time(nullptr)", status)
+        self.assertIn('response["ready"] = timeReady', status)
+        self.assertIn("keepStationEnabled", scan)
+        self.assertIn("WiFi.getMode()", scan)
+        self.assertIn("wifiMode == WIFI_AP_STA", scan)
+        self.assertIn("apMode_ && !keepStationEnabled", scan)
 
     def test_portal_delegates_page_codec_and_atomic_save(self):
         source = (ROOT / "src/ConfigPortal.cpp").read_text()

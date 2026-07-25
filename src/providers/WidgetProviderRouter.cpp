@@ -5,6 +5,8 @@
 #include "providers/JourneyTimeProvider.h"
 #include "providers/LightRailProvider.h"
 #include "providers/MtrProvider.h"
+#include "providers/TflRailProvider.h"
+#include "core/UiText.h"
 
 namespace {
 
@@ -15,7 +17,8 @@ transitink::ProviderResult invalidResult(uint8_t slot,
     snapshot.slot = slot;
     snapshot.type = config.type;
     snapshot.state = transitink::WidgetState::Error;
-    snapshot.providerMessage = "設定不完整";
+    snapshot.providerMessage =
+        transitink::uiText(transitink::UiTextId::InvalidConfig);
     snapshot.fetchedAtEpoch = nowEpoch;
     return {transitink::ProviderOutcome::InvalidConfig, snapshot};
 }
@@ -34,8 +37,14 @@ WidgetProviderRouter::WidgetProviderRouter(BusProvider& bus,
                                            GmbProvider& gmb,
                                            MtrProvider& mtr,
                                            LightRailProvider& lightRail,
+                                           TflRailProvider& tflRail,
                                            JourneyTimeProvider& journey)
-    : bus_(bus), gmb_(gmb), mtr_(mtr), lightRail_(lightRail), journey_(journey) {}
+    : bus_(bus),
+      gmb_(gmb),
+      mtr_(mtr),
+      lightRail_(lightRail),
+      tflRail_(tflRail),
+      journey_(journey) {}
 
 transitink::ProviderResult WidgetProviderRouter::fetch(
     uint8_t slot, const transitink::WidgetConfig& config, int64_t nowEpoch) {
@@ -56,6 +65,8 @@ transitink::ProviderResult WidgetProviderRouter::fetch(
                     return mtr_.fetch(slot, config, nowEpoch);
                 case transitink::RailMode::LightRail:
                     return lightRail_.fetch(slot, config, nowEpoch);
+                case transitink::RailMode::LondonRail:
+                    return tflRail_.fetch(slot, config, nowEpoch);
             }
             break;
         case transitink::WidgetType::JourneyTime:

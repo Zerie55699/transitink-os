@@ -64,4 +64,24 @@ int main() {
     assertPlan(transitink::planTruncatedUtf8("A", 2, glyphWidth, &widths), "", 0, 2);
     assert(transitink::planTruncatedUtf8("ABCDE", 0, glyphWidth, &widths).text.empty());
     assert(transitink::planTruncatedUtf8("ABCDE", -1, glyphWidth, &widths).text.empty());
+
+    assert(
+        transitink::withoutTrailingParentheticalQualifier(
+            "36 · LEI MUK SHUE (CIRCULAR)") ==
+        "36 · LEI MUK SHUE");
+    assert(
+        transitink::withoutTrailingParentheticalQualifier(
+            "96 · Tsuen Wan (Hoi Pa Street)") ==
+        "96 · Tsuen Wan");
+    assert(
+        transitink::withoutTrailingParentheticalQualifier(
+            "751 · Tin Yat") ==
+        "751 · Tin Yat");
+    assert(
+        transitink::withoutTrailingParentheticalQualifier(
+            "Route (Circular) via Central") ==
+        "Route (Circular) via Central");
+    assert(
+        transitink::withoutTrailingParentheticalQualifier("Route ()") ==
+        "Route ()");
 }

@@ -4,13 +4,10 @@
 #include <initializer_list>
 #include <utility>
 
+#include "core/UiText.h"
+
 namespace transitink {
 namespace {
-
-constexpr const char* kInvalidConfigMessage = "設定不完整";
-constexpr const char* kEmptyMessage = "暫無班次";
-constexpr const char* kClockUnsyncedMessage = "時間尚未同步";
-constexpr const char* kJourneyUnavailableMessage = "暫未能取得行車時間";
 
 std::string joinNonEmpty(std::initializer_list<std::string> parts) {
     std::string result;
@@ -68,7 +65,7 @@ std::string withoutTrailingStopCode(std::string label) {
 std::string countdownText(int64_t eventEpoch, int64_t nowEpoch) {
     const int64_t seconds = eventEpoch - nowEpoch;
     const int64_t minutes = seconds / 60 + (seconds % 60 == 0 ? 0 : 1);
-    return std::to_string(minutes) + " 分鐘";
+    return std::to_string(minutes) + uiText(UiTextId::MinuteSuffix);
 }
 
 WidgetSnapshot baseSnapshot(uint8_t slot,
@@ -93,9 +90,10 @@ ProviderResult errorResult(uint8_t slot,
 }
 
 ProviderResult emptyResult(WidgetSnapshot snapshot,
-                           const std::string& message = kEmptyMessage) {
+                           const std::string& message = {}) {
     snapshot.state = WidgetState::Empty;
-    snapshot.providerMessage = message;
+    snapshot.providerMessage =
+        message.empty() ? uiText(UiTextId::NoArrivals) : message;
     return {ProviderOutcome::Empty, std::move(snapshot)};
 }
 
@@ -125,11 +123,11 @@ void storeFirstTwo(WidgetSnapshot& snapshot, std::vector<WidgetValue>& values) {
 std::string journeyContext(int8_t colourId) {
     switch (colourId) {
         case 1:
-            return "交通擠塞";
+            return uiText(UiTextId::TrafficCongested);
         case 2:
-            return "行車緩慢";
+            return uiText(UiTextId::TrafficSlow);
         case 3:
-            return "交通暢順";
+            return uiText(UiTextId::TrafficClear);
         default:
             return {};
     }
@@ -156,22 +154,39 @@ WidgetSnapshot configuredWidgetSnapshot(uint8_t slot, const WidgetConfig& config
     switch (config.type) {
         case WidgetType::BusEta:
             snapshot.title = joinNonEmpty(
-                {config.bus.routeLabelTc, config.bus.destinationLabelTc});
-            snapshot.subtitle = displayStopLabelTc(config.bus.stopLabelTc);
+                {localizedDisplayLabel(config.bus.routeLabelTc,
+                                       config.bus.routeLabelEn),
+                 localizedDisplayLabel(config.bus.destinationLabelTc,
+                                       config.bus.destinationLabelEn)});
+            snapshot.subtitle = displayStopLabel(
+                localizedDisplayLabel(config.bus.stopLabelTc,
+                                      config.bus.stopLabelEn));
             break;
         case WidgetType::GmbEta:
             snapshot.title = joinNonEmpty(
-                {config.gmb.routeLabelTc, config.gmb.directionLabelTc});
-            snapshot.subtitle = config.gmb.stopLabelTc;
+                {localizedDisplayLabel(config.gmb.routeLabelTc,
+                                       config.gmb.routeLabelEn),
+                 localizedDisplayLabel(config.gmb.directionLabelTc,
+                                       config.gmb.directionLabelEn)});
+            snapshot.subtitle = localizedDisplayLabel(
+                config.gmb.stopLabelTc, config.gmb.stopLabelEn);
             break;
         case WidgetType::MtrEta:
             snapshot.title = joinNonEmpty(
-                {config.mtr.lineOrRouteLabelTc, config.mtr.directionLabelTc});
-            snapshot.subtitle = config.mtr.stationLabelTc;
+                {localizedDisplayLabel(config.mtr.lineOrRouteLabelTc,
+                                       config.mtr.lineOrRouteLabelEn),
+                 localizedDisplayLabel(config.mtr.directionLabelTc,
+                                       config.mtr.directionLabelEn)});
+            snapshot.subtitle = localizedDisplayLabel(
+                config.mtr.stationLabelTc, config.mtr.stationLabelEn);
             break;
         case WidgetType::JourneyTime:
-            snapshot.title = config.journeyTime.locationLabelTc;
-            snapshot.subtitle = config.journeyTime.destinationLabelTc;
+            snapshot.title = localizedDisplayLabel(
+                config.journeyTime.locationLabelTc,
+                config.journeyTime.locationLabelEn);
+            snapshot.subtitle = localizedDisplayLabel(
+                config.journeyTime.destinationLabelTc,
+                config.journeyTime.destinationLabelEn);
             break;
         case WidgetType::Disabled:
             break;
@@ -179,8 +194,24 @@ WidgetSnapshot configuredWidgetSnapshot(uint8_t slot, const WidgetConfig& config
     return snapshot;
 }
 
-std::string displayStopLabelTc(std::string label) {
+WidgetPageSnapshotSet snapshotsForWidgetPage(const WidgetSnapshotSet& snapshots,
+                                             std::size_t page) {
+    WidgetPageSnapshotSet result{};
+    if (page >= kWidgetPageCount) return result;
+    const std::size_t start = widgetPageStart(page);
+    for (std::size_t lane = 0; lane < kWidgetsPerPage; ++lane) {
+        result[lane] = snapshots[start + lane];
+        result[lane].slot = static_cast<uint8_t>(lane);
+    }
+    return result;
+}
+
+std::string displayStopLabel(std::string label) {
     return withoutTrailingStopCode(std::move(label));
+}
+
+std::string displayStopLabelTc(std::string label) {
+    return displayStopLabel(std::move(label));
 }
 
 uint32_t refreshIntervalMs(WidgetType type) {
@@ -199,6 +230,14 @@ uint32_t refreshIntervalMs(WidgetType type) {
     return 0;
 }
 
+uint32_t refreshIntervalMs(const WidgetConfig& config) {
+    if (config.type == WidgetType::BusEta &&
+        config.bus.operatorId == BusOperator::Tfl) {
+        return 30000;
+    }
+    return refreshIntervalMs(config.type);
+}
+
 uint32_t staleWindowSeconds(WidgetType type) {
     switch (type) {
         case WidgetType::BusEta:
@@ -213,6 +252,14 @@ uint32_t staleWindowSeconds(WidgetType type) {
             return 0;
     }
     return 0;
+}
+
+uint32_t staleWindowSeconds(const WidgetConfig& config) {
+    if (config.type == WidgetType::BusEta &&
+        config.bus.operatorId == BusOperator::Tfl) {
+        return 30;
+    }
+    return staleWindowSeconds(config.type);
 }
 
 bool deadlineReached(uint32_t nowMs, uint32_t deadlineMs) {
@@ -239,11 +286,11 @@ ProviderResult normalizeBusSnapshot(uint8_t slot,
                                     int64_t nowEpoch) {
     if (config.type != WidgetType::BusEta || !isWidgetConfigValid(config)) {
         return errorResult(slot, config, nowEpoch, ProviderOutcome::InvalidConfig,
-                           kInvalidConfigMessage);
+                           uiText(UiTextId::InvalidConfig));
     }
     if (nowEpoch <= 0) {
         return errorResult(slot, config, nowEpoch, ProviderOutcome::ClockUnsynced,
-                           kClockUnsyncedMessage);
+                           uiText(UiTextId::ClockUnsynced));
     }
 
     auto snapshot = baseSnapshot(slot, config, nowEpoch, nowEpoch);
@@ -254,12 +301,17 @@ ProviderResult normalizeBusSnapshot(uint8_t slot,
             !busRecordMatches(record, config.bus)) {
             continue;
         }
-        const std::string destination = record.destinationLabelTc.empty()
-                                            ? config.bus.destinationLabelTc
-                                            : record.destinationLabelTc;
+        const std::string destination = localizedDisplayLabel(
+            record.destinationLabelTc.empty() ? config.bus.destinationLabelTc
+                                              : record.destinationLabelTc,
+            record.destinationLabelEn.empty() ? config.bus.destinationLabelEn
+                                              : record.destinationLabelEn);
         appendUnique(values,
                      {countdownText(record.eventEpoch, nowEpoch),
-                      joinNonEmpty({destination, record.remarkTc}), record.eventEpoch});
+                      joinNonEmpty(
+                          {destination,
+                           localizedText(record.remarkTc, record.remarkEn)}),
+                      record.eventEpoch});
     }
     storeFirstTwo(snapshot, values);
     if (snapshot.valueCount == 0) return emptyResult(std::move(snapshot));
@@ -273,18 +325,21 @@ ProviderResult normalizeGmbSnapshot(uint8_t slot,
                                     int64_t nowEpoch) {
     if (config.type != WidgetType::GmbEta || !isWidgetConfigValid(config)) {
         return errorResult(slot, config, nowEpoch, ProviderOutcome::InvalidConfig,
-                           kInvalidConfigMessage);
+                           uiText(UiTextId::InvalidConfig));
     }
     if (nowEpoch <= 0) {
         return errorResult(slot, config, nowEpoch, ProviderOutcome::ClockUnsynced,
-                           kClockUnsyncedMessage);
+                           uiText(UiTextId::ClockUnsynced));
     }
 
     auto snapshot = baseSnapshot(slot, config, nowEpoch, nowEpoch);
     if (!payload.enabled) {
         return emptyResult(std::move(snapshot),
-                           payload.descriptionTc.empty() ? "到站預報暫停"
-                                                         : payload.descriptionTc);
+                           payload.descriptionTc.empty() &&
+                                   payload.descriptionEn.empty()
+                               ? uiText(UiTextId::EtaSuspended)
+                               : localizedText(payload.descriptionTc,
+                                               payload.descriptionEn));
     }
 
     std::vector<WidgetValue> values;
@@ -295,9 +350,10 @@ ProviderResult normalizeGmbSnapshot(uint8_t slot,
         const int64_t eventEpoch = nowEpoch + visibleMinutes * 60;
         appendUnique(values,
                      {record.diffMinutes == 0
-                          ? "即將到站"
-                          : std::to_string(record.diffMinutes) + " 分鐘",
-                      record.remarkTc, eventEpoch});
+                          ? uiText(UiTextId::ArrivingSoon)
+                          : std::to_string(record.diffMinutes) +
+                                uiText(UiTextId::MinuteSuffix),
+                      localizedText(record.remarkTc, record.remarkEn), eventEpoch});
     }
     storeFirstTwo(snapshot, values);
     if (snapshot.valueCount == 0) return emptyResult(std::move(snapshot));
@@ -312,11 +368,11 @@ ProviderResult normalizeRailSnapshot(uint8_t slot,
                                      int64_t nowEpoch) {
     if (config.type != WidgetType::MtrEta || !isWidgetConfigValid(config)) {
         return errorResult(slot, config, nowEpoch, ProviderOutcome::InvalidConfig,
-                           kInvalidConfigMessage);
+                           uiText(UiTextId::InvalidConfig));
     }
     if (nowEpoch <= 0) {
         return errorResult(slot, config, nowEpoch, ProviderOutcome::ClockUnsynced,
-                           kClockUnsyncedMessage);
+                           uiText(UiTextId::ClockUnsynced));
     }
 
     auto snapshot = baseSnapshot(slot, config, nowEpoch, dataEpoch);
@@ -327,13 +383,18 @@ ProviderResult normalizeRailSnapshot(uint8_t slot,
             !railRecordMatches(record, config.mtr)) {
             continue;
         }
-        const std::string destination = record.destinationLabelTc.empty()
-                                            ? config.mtr.directionLabelTc
-                                            : record.destinationLabelTc;
+        const std::string destination = localizedDisplayLabel(
+            record.destinationLabelTc.empty() ? config.mtr.directionLabelTc
+                                              : record.destinationLabelTc,
+            record.destinationLabelEn.empty() ? config.mtr.directionLabelEn
+                                              : record.destinationLabelEn);
         appendUnique(values,
                      {countdownText(record.eventEpoch, nowEpoch),
                       joinNonEmpty(
-                          {destination, record.platformLabelTc, record.messageTc}),
+                          {destination,
+                           localizedDisplayLabel(record.platformLabelTc,
+                                                 record.platformLabelEn),
+                           localizedText(record.messageTc, record.messageEn)}),
                       record.eventEpoch});
     }
     storeFirstTwo(snapshot, values);
@@ -348,7 +409,7 @@ ProviderResult normalizeJourneyTimeSnapshot(uint8_t slot,
                                             int64_t nowEpoch) {
     if (config.type != WidgetType::JourneyTime || !isWidgetConfigValid(config)) {
         return errorResult(slot, config, nowEpoch, ProviderOutcome::InvalidConfig,
-                           kInvalidConfigMessage);
+                           uiText(UiTextId::InvalidConfig));
     }
 
     auto snapshot = baseSnapshot(slot, config, nowEpoch, record.dataEpoch);
@@ -358,19 +419,20 @@ ProviderResult normalizeJourneyTimeSnapshot(uint8_t slot,
     }
     if (record.valueKind == JourneyTimeValueKind::Unavailable) {
         snapshot.state = WidgetState::Empty;
-        snapshot.providerMessage = kJourneyUnavailableMessage;
+        snapshot.providerMessage = uiText(UiTextId::JourneyUnavailable);
         return {ProviderOutcome::Empty, std::move(snapshot)};
     }
     std::string valueText;
     if (record.valueKind == JourneyTimeValueKind::Minutes) {
-        valueText = std::to_string(record.minutes) + " 分鐘";
+        valueText =
+            std::to_string(record.minutes) + uiText(UiTextId::MinuteSuffix);
     } else if (record.statusCode == 1) {
-        valueText = "交通擠塞";
+        valueText = uiText(UiTextId::TrafficCongested);
     } else if (record.statusCode == 3) {
-        valueText = "隧道封閉";
+        valueText = uiText(UiTextId::TunnelClosed);
     } else {
         snapshot.state = WidgetState::Empty;
-        snapshot.providerMessage = kJourneyUnavailableMessage;
+        snapshot.providerMessage = uiText(UiTextId::JourneyUnavailable);
         return {ProviderOutcome::Empty, std::move(snapshot)};
     }
     snapshot.values[0] = {std::move(valueText), journeyContext(record.colourId), 0};

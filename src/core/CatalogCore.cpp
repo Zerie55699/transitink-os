@@ -43,6 +43,17 @@ bool readText(JsonObjectConst object,
     return true;
 }
 
+bool readOptionalText(JsonObjectConst object,
+                      const char* key,
+                      std::string& value,
+                      std::string& error) {
+    value.clear();
+    if (!object.containsKey(key) || object[key].isNull()) {
+        return true;
+    }
+    return readText(object, key, value, error);
+}
+
 bool readIntegerOrNumericString(JsonVariantConst field, int& value) {
     if (field.is<int>()) {
         value = field.as<int>();
@@ -190,9 +201,14 @@ bool parseRouteObject(const std::string& json,
     std::string route;
     std::string origin;
     std::string destination;
+    std::string originEn;
+    std::string destinationEn;
     if (!readText(object, "route", route, error) ||
         !readText(object, "orig_tc", origin, error) ||
-        !readText(object, "dest_tc", destination, error) || !isOfficialId(route)) {
+        !readText(object, "dest_tc", destination, error) ||
+        !readOptionalText(object, "orig_en", originEn, error) ||
+        !readOptionalText(object, "dest_en", destinationEn, error) ||
+        !isOfficialId(route)) {
         if (error.empty()) {
             error = "路線編號格式不正確";
         }
@@ -200,8 +216,10 @@ bool parseRouteObject(const std::string& json,
     }
     if (format == BusCatalogFormat::Citybus) {
         if (parsed != nullptr) {
-            parsed->push_back({route, "I", "1", destination, origin});
-            parsed->push_back({route, "O", "1", origin, destination});
+            parsed->push_back(
+                {route, "I", "1", destination, origin, destinationEn, originEn});
+            parsed->push_back(
+                {route, "O", "1", origin, destination, originEn, destinationEn});
         }
         return true;
     }
@@ -217,7 +235,9 @@ bool parseRouteObject(const std::string& json,
         return false;
     }
     if (parsed != nullptr) {
-        parsed->push_back({route, direction, serviceType, origin, destination});
+        parsed->push_back(
+            {route, direction, serviceType, origin, destination, originEn,
+             destinationEn});
     }
     return true;
 }
@@ -234,16 +254,19 @@ bool parseStopLabels(CatalogByteReader& reader,
         }
         std::string stop;
         std::string label;
+        std::string labelEn;
         JsonObjectConst object = doc.as<JsonObjectConst>();
         if (!readText(object, "stop", stop, itemError) ||
-            !readText(object, "name_tc", label, itemError) || !isOfficialId(stop)) {
+            !readText(object, "name_tc", label, itemError) ||
+            !readOptionalText(object, "name_en", labelEn, itemError) ||
+            !isOfficialId(stop)) {
             if (itemError.empty()) {
                 itemError = "站牌目錄格式不正確";
             }
             return false;
         }
         if (requested == nullptr || requested->count(stop) != 0) {
-            parsed.push_back({stop, label});
+            parsed.push_back({stop, label, labelEn});
         }
         return true;
     }, error);
@@ -473,7 +496,7 @@ bool parseBusRouteStops(CatalogByteReader& reader,
             return false;
         }
         if (rowRoute == route && rowDirection == direction && rowService == serviceType) {
-            parsed.push_back({stop, "", static_cast<uint16_t>(sequence)});
+            parsed.push_back({stop, "", static_cast<uint16_t>(sequence), ""});
         }
         return true;
     }, error, false);
@@ -504,6 +527,7 @@ bool joinBusStopLabels(std::vector<BusCatalogStop>& stops,
             return false;
         }
         stop.labelTc = found->labelTc;
+        stop.labelEn = found->labelEn;
     }
     error.clear();
     return true;

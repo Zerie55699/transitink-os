@@ -5,6 +5,7 @@
 #include "providers/JourneyTimeProvider.h"
 #include "providers/LightRailProvider.h"
 #include "providers/MtrProvider.h"
+#include "providers/TflRailProvider.h"
 
 #include <array>
 #include <cassert>
@@ -22,7 +23,7 @@ using transitink::WidgetSnapshot;
 using transitink::WidgetState;
 using transitink::WidgetType;
 
-enum class ProviderKind { Bus, Gmb, Mtr, LightRail, JourneyTime };
+enum class ProviderKind { Bus, Gmb, Mtr, LightRail, TflRail, JourneyTime };
 
 struct ProviderCall {
     ProviderKind kind;
@@ -58,9 +59,18 @@ WidgetConfig railConfig(RailMode mode) {
     WidgetConfig config;
     config.type = WidgetType::MtrEta;
     config.mtr.mode = mode;
-    config.mtr.lineOrRouteId = mode == RailMode::HeavyRail ? "TML" : "610";
-    config.mtr.stationId = mode == RailMode::HeavyRail ? "YUL" : "100";
-    config.mtr.directionId = mode == RailMode::HeavyRail ? "UP" : "920";
+    config.mtr.lineOrRouteId =
+        mode == RailMode::HeavyRail
+            ? "TML"
+            : mode == RailMode::LightRail ? "610" : "victoria";
+    config.mtr.stationId =
+        mode == RailMode::HeavyRail
+            ? "YUL"
+            : mode == RailMode::LightRail ? "100" : "940GZZLUVIC";
+    config.mtr.directionId =
+        mode == RailMode::HeavyRail
+            ? "UP"
+            : mode == RailMode::LightRail ? "920" : "outbound";
     return config;
 }
 
@@ -103,11 +113,14 @@ void assertInvalid(const ProviderResult& result, uint8_t slot, WidgetType type) 
 
 }  // namespace
 
-BusProvider::BusProvider(KmbClient& kmb, CitybusClient& citybus) : kmb_(kmb), citybus_(citybus) {}
+BusProvider::BusProvider(KmbClient& kmb, CitybusClient& citybus,
+                         TflClient& tfl)
+    : kmb_(kmb), citybus_(citybus), tfl_(tfl) {}
 
 ProviderResult BusProvider::fetch(uint8_t slot, const WidgetConfig& config, int64_t nowEpoch) {
     (void)kmb_;
     (void)citybus_;
+    (void)tfl_;
     calls.push_back({ProviderKind::Bus, slot, &config, nowEpoch});
     return markerResult(ProviderKind::Bus, slot, config.type, nowEpoch);
 }
@@ -138,6 +151,16 @@ ProviderResult LightRailProvider::fetch(uint8_t slot, const WidgetConfig& config
     return markerResult(ProviderKind::LightRail, slot, config.type, nowEpoch);
 }
 
+TflRailProvider::TflRailProvider(TflClient& client) : client_(client) {}
+
+ProviderResult TflRailProvider::fetch(uint8_t slot,
+                                      const WidgetConfig& config,
+                                      int64_t nowEpoch) {
+    (void)client_;
+    calls.push_back({ProviderKind::TflRail, slot, &config, nowEpoch});
+    return markerResult(ProviderKind::TflRail, slot, config.type, nowEpoch);
+}
+
 JourneyTimeProvider::JourneyTimeProvider(JourneyTimeClient& client) : client_(client) {}
 
 ProviderResult JourneyTimeProvider::fetch(uint8_t slot, const WidgetConfig& config,
@@ -150,16 +173,18 @@ ProviderResult JourneyTimeProvider::fetch(uint8_t slot, const WidgetConfig& conf
 int main() {
     KmbClient kmb;
     CitybusClient citybus;
+    TflClient tfl;
     GmbClient gmbClient;
     MtrClient mtrClient;
     LightRailClient lightRailClient;
     JourneyTimeClient journeyClient;
-    BusProvider bus(kmb, citybus);
+    BusProvider bus(kmb, citybus, tfl);
     GmbProvider gmb(gmbClient);
     MtrProvider mtr(mtrClient);
     LightRailProvider lightRail(lightRailClient);
+    TflRailProvider tflRail(tfl);
     JourneyTimeProvider journey(journeyClient);
-    WidgetProviderRouter router(bus, gmb, mtr, lightRail, journey);
+    WidgetProviderRouter router(bus, gmb, mtr, lightRail, tflRail, journey);
 
     {
         const WidgetConfig config = busConfig();
@@ -190,11 +215,20 @@ int main() {
         assertForwarded(calls.back(), ProviderKind::LightRail, 3, config, 1700000004);
     }
     {
-        const WidgetConfig config = journeyConfig();
+        const WidgetConfig config = railConfig(RailMode::LondonRail);
         const auto result = router.fetch(0, config, 1700000005);
         assert(result.snapshot.title == "4");
         assert(calls.size() == 5);
-        assertForwarded(calls.back(), ProviderKind::JourneyTime, 0, config, 1700000005);
+        assertForwarded(calls.back(), ProviderKind::TflRail, 0, config,
+                        1700000005);
+    }
+    {
+        const WidgetConfig config = journeyConfig();
+        const auto result = router.fetch(0, config, 1700000006);
+        assert(result.snapshot.title == "5");
+        assert(calls.size() == 6);
+        assertForwarded(calls.back(), ProviderKind::JourneyTime, 0, config,
+                        1700000006);
     }
 
     {
@@ -225,7 +259,10 @@ int main() {
     {
         WidgetConfig config = journeyConfig();
         const std::size_t before = calls.size();
-        assertInvalid(router.fetch(4, config, 1700000013), 4, WidgetType::JourneyTime);
+        assertInvalid(router.fetch(transitink::kWidgetSlotCount, config,
+                                   1700000013),
+                      static_cast<uint8_t>(transitink::kWidgetSlotCount),
+                      WidgetType::JourneyTime);
         assert(calls.size() == before);
     }
     {

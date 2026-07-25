@@ -18,4 +18,6 @@ DisplayTextPlan planTruncatedUtf8(const std::string& text,
                                   CodepointWidth codepointWidth,
                                   void* context);
 
+std::string withoutTrailingParentheticalQualifier(const std::string& text);
+
 }  // namespace transitink

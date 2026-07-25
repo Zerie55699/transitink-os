@@ -1,6 +1,7 @@
 #include "providers/JourneyTimeProvider.h"
 
 #include "TransitCatalog.h"
+#include "core/UiText.h"
 
 JourneyTimeProvider::JourneyTimeProvider(JourneyTimeClient& client) : client_(client) {}
 
@@ -37,11 +38,13 @@ transitink::ProviderResult JourneyTimeProvider::fetch(
     auto result = transitink::normalizeJourneyTimeSnapshot(slot, config, noRecord,
                                                            nowEpoch);
     if (outcome == JourneyTimeFetchOutcome::Empty) {
-        result.snapshot.providerMessage = "暫未能取得行車時間";
+        result.snapshot.providerMessage =
+            transitink::uiText(transitink::UiTextId::JourneyUnavailable);
         return result;
     }
     result.outcome = transitink::ProviderOutcome::Failure;
     result.snapshot.state = transitink::WidgetState::Error;
-    result.snapshot.providerMessage = "未能更新行車時間";
+    result.snapshot.providerMessage =
+        transitink::uiText(transitink::UiTextId::JourneyUpdateFailed);
     return result;
 }

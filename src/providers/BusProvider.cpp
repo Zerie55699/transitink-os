@@ -3,8 +3,9 @@
 #include <string>
 #include <vector>
 
-BusProvider::BusProvider(KmbClient& kmb, CitybusClient& citybus)
-    : kmb_(kmb), citybus_(citybus) {}
+BusProvider::BusProvider(KmbClient& kmb, CitybusClient& citybus,
+                         TflClient& tfl)
+    : kmb_(kmb), citybus_(citybus), tfl_(tfl) {}
 
 transitink::ProviderResult BusProvider::fetch(
     uint8_t slot,
@@ -28,6 +29,10 @@ transitink::ProviderResult BusProvider::fetch(
             break;
         case transitink::BusOperator::Citybus:
             fetched = citybus_.fetchEtaRecords(config.bus, records, error);
+            break;
+        case transitink::BusOperator::Tfl:
+            fetched =
+                tfl_.fetchEtaRecords(config.bus, nowEpoch, records, error);
             break;
         default:
             error = "巴士營辦商設定不正確";

@@ -48,17 +48,21 @@ struct BusCatalogRoute {
     std::string serviceType;
     std::string originLabelTc;
     std::string destinationLabelTc;
+    std::string originLabelEn{};
+    std::string destinationLabelEn{};
 };
 
 struct BusStopLabel {
     std::string stopId;
     std::string labelTc;
+    std::string labelEn{};
 };
 
 struct BusCatalogStop {
     std::string stopId;
     std::string labelTc;
     uint16_t sequence = 0;
+    std::string labelEn{};
 };
 
 enum class CitybusStopResolution : uint8_t {

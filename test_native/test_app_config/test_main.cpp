@@ -25,6 +25,9 @@ transitink::WidgetConfig validBus(transitink::BusOperator operatorId = transitin
     widget.bus.routeLabelTc = "268B";
     widget.bus.stopLabelTc = "元朗廣場";
     widget.bus.destinationLabelTc = "紅磡碼頭";
+    widget.bus.routeLabelEn = "268B";
+    widget.bus.stopLabelEn = "Yuen Long Plaza";
+    widget.bus.destinationLabelEn = "Hung Hom Ferry Pier";
     return widget;
 }
 
@@ -38,6 +41,9 @@ transitink::WidgetConfig validMtr() {
     widget.mtr.lineOrRouteLabelTc = "屯馬綫";
     widget.mtr.stationLabelTc = "元朗";
     widget.mtr.directionLabelTc = "往烏溪沙";
+    widget.mtr.lineOrRouteLabelEn = "Tuen Ma Line";
+    widget.mtr.stationLabelEn = "Yuen Long";
+    widget.mtr.directionLabelEn = "Wu Kai Sha bound";
     return widget;
 }
 
@@ -53,6 +59,9 @@ transitink::WidgetConfig validGmb() {
     widget.gmb.routeLabelTc = "專線小巴 69";
     widget.gmb.stopLabelTc = "數碼港公共運輸交匯處";
     widget.gmb.directionLabelTc = "往鰂魚涌";
+    widget.gmb.routeLabelEn = "Green minibus 69";
+    widget.gmb.stopLabelEn = "Cyberport Public Transport Interchange";
+    widget.gmb.directionLabelEn = "Quarry Bay bound";
     return widget;
 }
 
@@ -63,14 +72,18 @@ transitink::WidgetConfig validJourney() {
     widget.journeyTime.destinationId = "KOWLOON";
     widget.journeyTime.locationLabelTc = "元朗公路";
     widget.journeyTime.destinationLabelTc = "九龍";
+    // The official Journey Time feed does not currently provide labels for
+    // this fixture in English. Empty fields exercise source-language fallback.
     return widget;
 }
 
 DeviceConfig roundTripConfig() {
     DeviceConfig config;
+    config.uiLocale = transitink::UiLocale::EnGb;
+    config.timeZone = transitink::DeviceTimeZone::UnitedKingdom;
     config.wifiSsid = "TransitInk-Test";
     config.wifiPassword = "password";
-    config.weatherLocationTc = "香港天文台";
+    config.weatherLocationTc = "uk:london";
     config.scheduledWakeEnabled = true;
     config.scheduledWakeStartMinutes = 8 * 60;
     config.scheduledWakeEndMinutes = 9 * 60;
@@ -128,6 +141,25 @@ std::string v2Json(const std::string& widgets, const std::string& wifiSsid = "wi
     return R"({"schema_version":2,"wifi_ssid":")" + wifiSsid + R"(","widgets":)" + widgets + '}';
 }
 
+std::string v3Json(const std::string& widgets, const std::string& wifiSsid = "wifi") {
+    return R"({"schema_version":3,"wifi_ssid":")" + wifiSsid + R"(","widgets":)" + widgets + '}';
+}
+
+void test_v2_four_slot_config_migrates_and_defaults_to_traditional_chinese() {
+    DeviceConfig parsed = sentinelConfig();
+    String error;
+    TEST_ASSERT_TRUE(parseDeviceConfigJson(v2Json(disabledWidgets(4)), parsed, error));
+    TEST_ASSERT_TRUE(error.empty());
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(transitink::UiLocale::ZhHk),
+                          static_cast<int>(parsed.uiLocale));
+    TEST_ASSERT_EQUAL_INT(
+        static_cast<int>(transitink::DeviceTimeZone::HongKong),
+        static_cast<int>(parsed.timeZone));
+    TEST_ASSERT_EQUAL_UINT16(transitink::kConfigSchemaVersion, parsed.schemaVersion);
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(transitink::WidgetType::Disabled),
+                          static_cast<int>(parsed.widgets[11].type));
+}
+
 void test_has_usable_config_requires_valid_complete_schema() {
     DeviceConfig config;
     config.wifiSsid = "wifi";
@@ -151,13 +183,21 @@ void test_has_usable_config_requires_valid_complete_schema() {
     TEST_ASSERT_FALSE(hasUsableConfig(config));
 
     config.weatherLocationTc = "香港天文台";
+    config.uiLocale = static_cast<transitink::UiLocale>(0xff);
+    TEST_ASSERT_FALSE(hasUsableConfig(config));
+
+    config.uiLocale = transitink::UiLocale::ZhHk;
+    config.timeZone = static_cast<transitink::DeviceTimeZone>(0xff);
+    TEST_ASSERT_FALSE(hasUsableConfig(config));
+
+    config.timeZone = transitink::DeviceTimeZone::HongKong;
     config.scheduledWakeEnabled = true;
     config.scheduledWakeStartMinutes = 480;
     config.scheduledWakeEndMinutes = 480;
     TEST_ASSERT_FALSE(hasUsableConfig(config));
 }
 
-void test_v2_round_trip_uses_exact_active_payloads() {
+void test_v3_round_trip_uses_exact_active_payloads() {
     const DeviceConfig original = roundTripConfig();
     DeviceConfigSerializationMetrics metrics;
     String json;
@@ -168,6 +208,11 @@ void test_v2_round_trip_uses_exact_active_payloads() {
     StaticJsonDocument<transitink::kConfigJsonCapacity> doc;
     TEST_ASSERT_FALSE(deserializeJson(doc, json));
     TEST_ASSERT_EQUAL_UINT16(transitink::kConfigSchemaVersion, doc["schema_version"].as<uint16_t>());
+    TEST_ASSERT_EQUAL_STRING("en-GB", doc["ui_locale"].as<const char*>());
+    TEST_ASSERT_EQUAL_STRING("Europe/London",
+                             doc["time_zone"].as<const char*>());
+    TEST_ASSERT_EQUAL_STRING("uk:london",
+                             doc["weather_location_tc"].as<const char*>());
     JsonArrayConst widgets = doc["widgets"].as<JsonArrayConst>();
     TEST_ASSERT_EQUAL_UINT32(transitink::kWidgetSlotCount, widgets.size());
 
@@ -177,6 +222,8 @@ void test_v2_round_trip_uses_exact_active_payloads() {
     TEST_ASSERT_FALSE(bus.containsKey("journey_time"));
     TEST_ASSERT_FALSE(bus.containsKey("gmb"));
     TEST_ASSERT_EQUAL_STRING("kmb", bus["bus"]["operator"].as<const char*>());
+    TEST_ASSERT_EQUAL_STRING("Yuen Long Plaza",
+                             bus["bus"]["stop_label_en"].as<const char*>());
 
     JsonObjectConst mtr = widgets[1].as<JsonObjectConst>();
     TEST_ASSERT_TRUE(mtr.containsKey("mtr"));
@@ -199,14 +246,40 @@ void test_v2_round_trip_uses_exact_active_payloads() {
     TEST_ASSERT_TRUE(parseDeviceConfigJson(json, parsed, error));
     TEST_ASSERT_EQUAL_STRING("268B", parsed.widgets[0].bus.routeId.c_str());
     TEST_ASSERT_EQUAL_STRING("YUL", parsed.widgets[1].mtr.stationId.c_str());
+    TEST_ASSERT_EQUAL_STRING("Yuen Long",
+                             parsed.widgets[1].mtr.stationLabelEn.c_str());
     TEST_ASSERT_EQUAL_STRING("KOWLOON", parsed.widgets[2].journeyTime.destinationId.c_str());
     TEST_ASSERT_EQUAL_STRING("20003337", parsed.widgets[3].gmb.stopId.c_str());
+    TEST_ASSERT_EQUAL_STRING(
+        "Cyberport Public Transport Interchange",
+        parsed.widgets[3].gmb.stopLabelEn.c_str());
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(transitink::UiLocale::EnGb),
+                          static_cast<int>(parsed.uiLocale));
+    TEST_ASSERT_EQUAL_INT(
+        static_cast<int>(transitink::DeviceTimeZone::UnitedKingdom),
+        static_cast<int>(parsed.timeZone));
     TEST_ASSERT_TRUE(doc["scheduled_wake_enabled"].as<bool>());
     TEST_ASSERT_EQUAL_UINT16(8 * 60, doc["scheduled_wake_start_minutes"].as<uint16_t>());
     TEST_ASSERT_EQUAL_UINT16(9 * 60, doc["scheduled_wake_end_minutes"].as<uint16_t>());
     TEST_ASSERT_TRUE(parsed.scheduledWakeEnabled);
     TEST_ASSERT_EQUAL_UINT16(8 * 60, parsed.scheduledWakeStartMinutes);
     TEST_ASSERT_EQUAL_UINT16(9 * 60, parsed.scheduledWakeEndMinutes);
+}
+
+void test_invalid_time_zone_is_rejected_without_mutation() {
+    std::string invalidJson = v2Json(disabledWidgets(4));
+    invalidJson.pop_back();
+    invalidJson += R"(,"time_zone":"Etc/Unknown"})";
+    assertParseFailurePreserves(invalidJson);
+
+    DeviceConfig invalid = roundTripConfig();
+    invalid.timeZone = static_cast<transitink::DeviceTimeZone>(0xff);
+    DeviceConfigSerializationMetrics metrics;
+    String json;
+    String error;
+    TEST_ASSERT_FALSE(
+        serializeDeviceConfigJsonChecked(invalid, json, metrics, error));
+    TEST_ASSERT_FALSE(error.empty());
 }
 
 void test_scheduled_wake_rejects_invalid_windows_without_mutation() {
@@ -229,12 +302,16 @@ void test_scheduled_wake_rejects_invalid_windows_without_mutation() {
 
 void test_parse_failures_preserve_the_original_config() {
     assertParseFailurePreserves("{");
-    assertParseFailurePreserves(R"({"schema_version":3,"wifi_ssid":"wifi","widgets":[{"type":"disabled"},{"type":"disabled"},{"type":"disabled"},{"type":"disabled"}]})");
+    assertParseFailurePreserves(v3Json(disabledWidgets(4)));
+    assertParseFailurePreserves(
+        R"({"schema_version":4,"wifi_ssid":"wifi","widgets":[]})");
     assertParseFailurePreserves(v2Json(disabledWidgets(3)));
     assertParseFailurePreserves(v2Json(R"([{"type":"bus_eta","bus":{"operator":"bogus","route_id":"1","direction_id":"O","service_type":"1","stop_id":"S"}},{"type":"disabled"},{"type":"disabled"},{"type":"disabled"}])"));
     assertParseFailurePreserves(v2Json(R"([{"type":"gmb_eta","gmb":{"region":"HKI","route_code":"69","route_id":"not-numeric","route_seq":"1","stop_id":"20003337","stop_seq":"1"}},{"type":"disabled"},{"type":"disabled"},{"type":"disabled"}])"));
     assertParseFailurePreserves(v2Json(disabledWidgets(4), repeated('S', transitink::kMaxWifiSsidBytes + 1)));
     assertParseFailurePreserves(v2Json(disabledWidgets(4), repeated('X', transitink::kConfigJsonCapacity + 1)));
+    assertParseFailurePreserves(
+        R"({"schema_version":2,"ui_locale":"fr-FR","wifi_ssid":"wifi","widgets":[{"type":"disabled"},{"type":"disabled"},{"type":"disabled"},{"type":"disabled"}]})");
 }
 
 void test_legacy_decode_migrates_directly_to_widget_slots() {
@@ -243,6 +320,8 @@ void test_legacy_decode_migrates_directly_to_widget_slots() {
     String error;
     TEST_ASSERT_TRUE(parseDeviceConfigJson(legacy, parsed, error));
     TEST_ASSERT_EQUAL_UINT16(transitink::kConfigSchemaVersion, parsed.schemaVersion);
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(transitink::UiLocale::ZhHk),
+                          static_cast<int>(parsed.uiLocale));
     TEST_ASSERT_EQUAL_INT(static_cast<int>(transitink::WidgetType::BusEta),
                           static_cast<int>(parsed.widgets[0].type));
     TEST_ASSERT_EQUAL_STRING("268B", parsed.widgets[0].bus.routeId.c_str());
@@ -256,6 +335,7 @@ void test_legacy_decode_migrates_directly_to_widget_slots() {
     TEST_ASSERT_FALSE(doc.containsKey("routes"));
     TEST_ASSERT_FALSE(doc.containsKey("stop_name_tc"));
     TEST_ASSERT_FALSE(doc.containsKey("refresh_seconds"));
+    TEST_ASSERT_EQUAL_STRING("zh-HK", doc["ui_locale"].as<const char*>());
 }
 
 void test_maximum_valid_config_stays_within_capacity_headroom() {
@@ -272,6 +352,10 @@ void test_maximum_valid_config_stays_within_capacity_headroom() {
         widget.bus.routeLabelTc = repeated('A', transitink::kMaxConfigLabelBytes);
         widget.bus.stopLabelTc = repeated('B', transitink::kMaxConfigLabelBytes);
         widget.bus.destinationLabelTc = repeated('C', transitink::kMaxConfigLabelBytes);
+        widget.bus.routeLabelEn = repeated('D', transitink::kMaxConfigLabelBytes);
+        widget.bus.stopLabelEn = repeated('E', transitink::kMaxConfigLabelBytes);
+        widget.bus.destinationLabelEn =
+            repeated('F', transitink::kMaxConfigLabelBytes);
     }
 
     DeviceConfigSerializationMetrics metrics;
@@ -279,7 +363,8 @@ void test_maximum_valid_config_stays_within_capacity_headroom() {
     String error;
     TEST_ASSERT_TRUE(serializeDeviceConfigJsonChecked(config, json, metrics, error));
     TEST_ASSERT_LESS_OR_EQUAL_UINT32(transitink::kConfigJsonSafeBytes, metrics.documentBytes);
-    TEST_ASSERT_LESS_OR_EQUAL_UINT32(transitink::kConfigJsonSafeBytes, metrics.jsonBytes);
+    TEST_ASSERT_LESS_OR_EQUAL_UINT32(transitink::kConfigBlobSafeBytes,
+                                     metrics.jsonBytes);
     TEST_ASSERT_EQUAL_UINT32(metrics.jsonBytes, json.size());
     std::printf("CONFIG_CAPACITY document=%zu json=%zu safe=%zu capacity=%zu\n",
                 metrics.documentBytes,
@@ -329,7 +414,7 @@ void test_sleep_resume_marker_is_persistent_and_idempotent() {
     TEST_ASSERT_EQUAL_UINT32(2, Preferences::testBoolWriteCount());
 }
 
-void test_portal_get_redacts_password_and_round_trips_four_slots() {
+void test_portal_get_redacts_password_and_round_trips_twelve_slots() {
     DeviceConfig config = roundTripConfig();
     config.widgets[3] = validMtr();
     config.wifiPassword = "never-return-this";
@@ -346,7 +431,7 @@ void test_portal_get_redacts_password_and_round_trips_four_slots() {
     TEST_ASSERT_FALSE(deserializeJson(doc, json));
     TEST_ASSERT_FALSE(doc.containsKey("wifi_password"));
     TEST_ASSERT_TRUE(doc["wifi_password_set"].as<bool>());
-    TEST_ASSERT_EQUAL_UINT32(4, doc["widgets"].size());
+    TEST_ASSERT_EQUAL_UINT32(transitink::kWidgetSlotCount, doc["widgets"].size());
     TEST_ASSERT_EQUAL_STRING("2.0.0", doc["firmware_version"].as<const char*>());
     TEST_ASSERT_EQUAL_STRING("0123456789abcdef0123456789abcdef",
                              doc["csrf_token"].as<const char*>());
@@ -354,6 +439,9 @@ void test_portal_get_redacts_password_and_round_trips_four_slots() {
     TEST_ASSERT_TRUE(doc["scheduled_wake_enabled"].as<bool>());
     TEST_ASSERT_EQUAL_UINT16(8 * 60, doc["scheduled_wake_start_minutes"].as<uint16_t>());
     TEST_ASSERT_EQUAL_UINT16(9 * 60, doc["scheduled_wake_end_minutes"].as<uint16_t>());
+    TEST_ASSERT_EQUAL_STRING("en-GB", doc["ui_locale"].as<const char*>());
+    TEST_ASSERT_EQUAL_STRING("Europe/London",
+                             doc["time_zone"].as<const char*>());
     TEST_ASSERT_EQUAL(std::string::npos, json.find("never-return-this"));
 }
 
@@ -404,7 +492,7 @@ void test_portal_failed_save_does_not_mutate_live_config() {
     TEST_ASSERT_FALSE(error.empty());
 }
 
-void test_portal_successful_four_widget_save_survives_reboot_load() {
+void test_portal_successful_multi_page_save_survives_reboot_load() {
     DeviceConfig live;
     live.wifiSsid = "TransitInk-Test";
     live.wifiPassword = "stored-secret";
@@ -414,6 +502,8 @@ void test_portal_successful_four_widget_save_survives_reboot_load() {
     DeviceConfig submitted = live;
     submitted.widgets[2] = validMtr();
     submitted.widgets[3] = validJourney();
+    submitted.widgets[4] = validBus(transitink::BusOperator::Citybus);
+    submitted.uiLocale = transitink::UiLocale::EnGb;
 
     ConfigStore store;
     TEST_ASSERT_TRUE(store.begin());
@@ -434,9 +524,13 @@ void test_portal_successful_four_widget_save_survives_reboot_load() {
                           static_cast<int>(rebooted.widgets[2].type));
     TEST_ASSERT_EQUAL_INT(static_cast<int>(transitink::WidgetType::JourneyTime),
                           static_cast<int>(rebooted.widgets[3].type));
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(transitink::WidgetType::BusEta),
+                          static_cast<int>(rebooted.widgets[4].type));
     TEST_ASSERT_EQUAL_STRING("YUL", rebooted.widgets[2].mtr.stationId.c_str());
     TEST_ASSERT_EQUAL_STRING("KOWLOON", rebooted.widgets[3].journeyTime.destinationId.c_str());
     TEST_ASSERT_EQUAL_STRING("stored-secret", rebooted.wifiPassword.c_str());
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(transitink::UiLocale::EnGb),
+                          static_cast<int>(rebooted.uiLocale));
 }
 
 void test_portal_save_auth_rejects_cross_site_and_invalid_tokens() {
@@ -494,7 +588,9 @@ void tearDown() {}
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_has_usable_config_requires_valid_complete_schema);
-    RUN_TEST(test_v2_round_trip_uses_exact_active_payloads);
+    RUN_TEST(test_v3_round_trip_uses_exact_active_payloads);
+    RUN_TEST(test_v2_four_slot_config_migrates_and_defaults_to_traditional_chinese);
+    RUN_TEST(test_invalid_time_zone_is_rejected_without_mutation);
     RUN_TEST(test_scheduled_wake_rejects_invalid_windows_without_mutation);
     RUN_TEST(test_parse_failures_preserve_the_original_config);
     RUN_TEST(test_legacy_decode_migrates_directly_to_widget_slots);
@@ -502,11 +598,11 @@ int main(int, char**) {
     RUN_TEST(test_checked_serializer_rejects_over_limit_input);
     RUN_TEST(test_invalid_config_save_preserves_last_valid_json);
     RUN_TEST(test_sleep_resume_marker_is_persistent_and_idempotent);
-    RUN_TEST(test_portal_get_redacts_password_and_round_trips_four_slots);
+    RUN_TEST(test_portal_get_redacts_password_and_round_trips_twelve_slots);
     RUN_TEST(test_portal_post_preserves_empty_password_and_replaces_non_empty_password);
     RUN_TEST(test_portal_post_rejects_malformed_oversized_and_wrong_slot_count);
     RUN_TEST(test_portal_failed_save_does_not_mutate_live_config);
-    RUN_TEST(test_portal_successful_four_widget_save_survives_reboot_load);
+    RUN_TEST(test_portal_successful_multi_page_save_survives_reboot_load);
     RUN_TEST(test_portal_save_auth_rejects_cross_site_and_invalid_tokens);
     RUN_TEST(test_portal_ap_password_and_request_source_are_restricted);
     return UNITY_END();

@@ -5,13 +5,16 @@
 
 #include "LightRailClient.h"
 #include "MtrClient.h"
+#include "TflClient.h"
 #include "providers/LightRailProvider.h"
 #include "providers/MtrProvider.h"
+#include "providers/TflRailProvider.h"
 
 namespace {
 
 int gMtrFetchCalls = 0;
 int gLightRailFetchCalls = 0;
+int gTflRailFetchCalls = 0;
 
 transitink::WidgetConfig heavyConfig() {
     transitink::WidgetConfig config;
@@ -36,6 +39,19 @@ transitink::WidgetConfig lightRailConfig() {
     config.mtr.lineOrRouteLabelTc = "610";
     config.mtr.stationLabelTc = "元朗";
     config.mtr.directionLabelTc = "屯門碼頭方向";
+    return config;
+}
+
+transitink::WidgetConfig londonRailConfig() {
+    transitink::WidgetConfig config;
+    config.type = transitink::WidgetType::MtrEta;
+    config.mtr.mode = transitink::RailMode::LondonRail;
+    config.mtr.lineOrRouteId = "victoria";
+    config.mtr.stationId = "940GZZLUVIC";
+    config.mtr.directionId = "outbound";
+    config.mtr.lineOrRouteLabelTc = "Victoria";
+    config.mtr.stationLabelTc = "Victoria";
+    config.mtr.directionLabelTc = "Outbound";
     return config;
 }
 
@@ -92,6 +108,19 @@ void testLightRailProviderRejectsInvalidSelectionsBeforeClockAndClient() {
     assert(gLightRailFetchCalls == 0);
 }
 
+void testTflRailProviderRejectsInvalidModeBeforeClient() {
+    TflClient client;
+    TflRailProvider provider(client);
+
+    for (int64_t nowEpoch : {int64_t{0}, int64_t{2000000000}}) {
+        auto wrongMode = londonRailConfig();
+        wrongMode.mtr.mode = transitink::RailMode::HeavyRail;
+        assertInvalidConfig(provider.fetch(2, wrongMode, nowEpoch),
+                            "倫敦鐵路網絡設定不正確");
+    }
+    assert(gTflRailFetchCalls == 0);
+}
+
 }  // namespace
 
 bool MtrClient::fetchArrivals(
@@ -113,8 +142,18 @@ bool LightRailClient::fetchArrivals(
     return false;
 }
 
+bool TflClient::fetchRailArrivals(
+    const transitink::MtrWidgetConfig&,
+    int64_t,
+    std::vector<transitink::RailArrivalRecord>&,
+    String&) {
+    ++gTflRailFetchCalls;
+    return false;
+}
+
 int main() {
     testMtrProviderRejectsInvalidSelectionsBeforeClockAndClient();
     testLightRailProviderRejectsInvalidSelectionsBeforeClockAndClient();
+    testTflRailProviderRejectsInvalidModeBeforeClient();
     return 0;
 }

@@ -79,10 +79,46 @@ class BusProviderStructureTests(unittest.TestCase):
         self.assertIn("case transitink::BusOperator::Kmb:", source)
         self.assertIn("case transitink::BusOperator::LongWin:", source)
         self.assertIn("case transitink::BusOperator::Citybus:", source)
+        self.assertIn("case transitink::BusOperator::Tfl:", source)
         self.assertIn("kmb_.fetchEtaRecords(config.bus", source)
         self.assertIn("citybus_.fetchEtaRecords(config.bus", source)
+        self.assertIn("tfl_.fetchEtaRecords(config.bus, nowEpoch", source)
         self.assertGreaterEqual(source.count("normalizeBusSnapshot("), 2)
         self.assertNotRegex(source, r"routeId[^\n]*(LongWin|LWB|lwb)")
+
+    def test_tfl_uses_verified_tls_streaming_catalog_and_anonymous_api(self):
+        header = self.source("include/TflClient.h")
+        source = self.source("src/TflClient.cpp")
+        trust = self.source("include/TransitTlsTrust.h")
+        parser = self.source("src/TransitJsonParsers.cpp")
+        catalog = self.source("src/WidgetCatalogService.cpp")
+        portal = self.source("src/TransitInkPortalPage.cpp")
+
+        self.assertIn("https://api.tfl.gov.uk", source)
+        self.assertIn('"/Line/"', source)
+        self.assertIn('"/Route/Sequence/"', source)
+        self.assertIn('"/StopPoint/"', source)
+        self.assertIn("configureTflVerifiedTls", source)
+        self.assertIn("kGoogleTrustServicesRootR4", trust)
+        self.assertNotIn("setInsecure", source)
+        self.assertNotIn("app_key", header + source)
+        self.assertIn("DeserializationOption::Filter(filter)", source)
+        self.assertIn("http.useHTTP10(true)", source)
+        self.assertIn('filter["orderedLineRoutes"]', source)
+        self.assertIn('filter["stopPointSequences"]', source)
+        self.assertIn("parseTflDirectionsJson", parser)
+        self.assertIn("parseTflRouteSequenceJson", parser)
+        self.assertIn("parseTflEtaJson", parser)
+        self.assertIn("isValidJsonObject(json)", catalog)
+        self.assertIn('item["id"] = id;', catalog)
+        self.assertIn(
+            'item["label_tc"] = visibleStopLabel(stop.labelTc);', catalog
+        )
+        self.assertNotIn(
+            "visibleStopLabel(stop.labelTc).c_str()", catalog
+        )
+        self.assertIn("Powered by TfL Open Data", portal)
+        self.assertIn("Data provided by Transport for London", portal)
 
     def test_kmb_overload_selects_exact_company_without_route_inference(self):
         header = self.source("include/KmbClient.h")

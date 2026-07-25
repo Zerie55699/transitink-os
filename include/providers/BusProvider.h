@@ -4,11 +4,12 @@
 
 #include "CitybusClient.h"
 #include "KmbClient.h"
+#include "TflClient.h"
 #include "core/WidgetCore.h"
 
 class BusProvider {
 public:
-    BusProvider(KmbClient& kmb, CitybusClient& citybus);
+    BusProvider(KmbClient& kmb, CitybusClient& citybus, TflClient& tfl);
 
     transitink::ProviderResult fetch(uint8_t slot,
                                      const transitink::WidgetConfig& config,
@@ -17,4 +18,5 @@ public:
 private:
     KmbClient& kmb_;
     CitybusClient& citybus_;
+    TflClient& tfl_;
 };

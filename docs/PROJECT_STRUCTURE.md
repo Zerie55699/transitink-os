@@ -68,7 +68,8 @@ The top level of `src/` contains the Arduino-facing implementation:
 - `ConfigStore`, `AppConfig`, `ConfigPortal`, `PortalConfigCodec`, and
   `TransitInkPortalPage` own persistent settings and the local web portal.
 - `KmbClient`, `CitybusClient`, `GmbClient`, `MtrClient`, `LightRailClient`,
-  `JourneyTimeClient`, and `WeatherClient` perform remote data access.
+  `TflClient`, `JourneyTimeClient`, and `WeatherClient` perform remote data
+  access.
 - `ConfigPortal` streams versioned gzip bus, Green Minibus, MTR, and Light Rail
   assets directly from generated PROGMEM arrays without decompressing them in
   ESP32 RAM. `WidgetCatalogService` owns compact journey-time projections and
@@ -78,19 +79,39 @@ The top level of `src/` contains the Arduino-facing implementation:
 
 `scripts/generate_transit_route_catalog.py` is the maintainer path for bulk
 low-frequency official route and stop sources. It validates and deterministically
-generates `index.json.gz`, three provider stop packs, `rail.json.gz`, a manifest,
+generates `index.json.gz`, four provider stop packs, `rail.json.gz`, a manifest,
 and the C++ PROGMEM arrays under `src/generated/`. A normal firmware build reads
 the tracked output and performs no catalog downloads.
 
-The portal loads the embedded index and rail assets alongside `/api/config`,
-loads a provider stop pack only when it is needed, then resolves route,
-direction and stop selections in the browser. Normal selection never calls an
-official route API. Journey-time locations remain small API projections, and
-live ETA clients are independent from this catalog path.
+The portal loads the embedded index and Hong Kong and London rail assets alongside
+`/api/config`, loads a provider stop pack only when it is needed, then resolves
+Hong Kong and London route, direction, and stop selections in the browser.
+TfL is contacted only for live arrivals, explicit updates, or a route newer
+than the bundled baseline; refreshed route data are cached in LittleFS.
+Journey-time locations remain small API projections, and live ETA clients are
+independent from the embedded catalog path.
+
+Catalog records may carry both `label_tc` and `label_en`. The portal and
+electronic-paper view choose the label for `ui_locale`; if that field is empty,
+they display the provider's available source-language label. Saved widget
+settings retain both labels so changing language does not require selecting the
+route or stop again. `WeatherClient` applies the same rule by requesting the
+Hong Kong Observatory `tc` or `en` response for Hong Kong, or by using the
+selected bilingual city label with the Open-Meteo UK Met Office model for the
+United Kingdom.
+
+Weather location and device time zone are independent settings. The time-zone
+core maps the stable `Asia/Hong_Kong` and `Europe/London` IDs to POSIX time-zone
+rules. The London rule includes GMT/BST transitions and is applied before
+calculating the display clock, background maintenance, or daily scheduled wake.
+Existing settings without a time-zone field default to Hong Kong. In the portal,
+weather locations are grouped behind a Hong Kong or United Kingdom selector;
+the stored location ID still determines the group, so existing settings need no
+migration.
 
 When a route or stop is absent, the user chooses "找不到站牌？更新所有路線" under
-"更新及省電". The device refreshes the complete KMB/Long Win, Citybus, and Green
-Minibus route indexes. Routes already used by the four widget drafts refresh
+"設定". The device refreshes the complete KMB/Long Win, Citybus, and Green
+Minibus route indexes. Routes already used by the configured widget drafts refresh
 their directions and stops in the same operation; another route refreshes and
 persists its detail the first time it is selected after the index update.
 `WidgetCatalogService` validates the responses and atomically replaces both the
@@ -111,10 +132,10 @@ keeps them fast to compile and easy to exercise with strict host warnings.
 
 ### Provider adapters
 
-`src/providers/` converts bus, Green Minibus, rail, and journey-time responses into common widget
-snapshots. `WidgetProviderRouter` is the dispatch boundary used by
-`WidgetScheduler`; display code should consume snapshots instead of calling an
-operator client directly.
+`src/providers/` converts bus, Green Minibus, Hong Kong rail, TfL rail, and
+journey-time responses into common widget snapshots. `WidgetProviderRouter` is
+the dispatch boundary used by `WidgetScheduler`; display code should consume
+snapshots instead of calling an operator client directly.
 
 ## Test layers
 

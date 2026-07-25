@@ -9,6 +9,8 @@ bool factoryResetUpButtonPressed();
 bool factoryResetDownButtonPressed();
 bool takeConfigClick();
 void clearPendingConfigClick();
+bool takeWidgetPageClick();
+void clearPendingWidgetPageClick();
 bool takeFactoryResetHold();
 bool takeHomePress();
 void clearPendingHomePress();

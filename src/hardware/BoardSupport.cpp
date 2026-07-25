@@ -38,12 +38,16 @@ bool buttonPressed(int pin) {
 }
 
 std::atomic<bool> configClickPending{false};
+std::atomic<bool> widgetPageClickPending{false};
 std::atomic<bool> factoryResetHoldPending{false};
 std::atomic<bool> homePressPending{false};
 TaskHandle_t buttonMonitorTaskHandle = nullptr;
 bus_eta::DualButtonHoldDetector factoryResetDetector(
     kBoardProfile.buttons.factoryResetHoldMs);
 bus_eta::SingleButtonClickDetector configButtonDetector(
+    kBoardProfile.buttons.configDebounceMs,
+    kBoardProfile.buttons.configMaxClickMs);
+bus_eta::SingleButtonClickDetector widgetPageButtonDetector(
     kBoardProfile.buttons.configDebounceMs,
     kBoardProfile.buttons.configMaxClickMs);
 bus_eta::DebouncedButtonPressDetector homeButtonDetector(
@@ -60,6 +64,9 @@ void monitorButtons(void*) {
         }
         if (configButtonDetector.update(configPressed, downPressed, nowMs)) {
             configClickPending.store(true, std::memory_order_relaxed);
+        }
+        if (widgetPageButtonDetector.update(downPressed, upPressed, nowMs)) {
+            widgetPageClickPending.store(true, std::memory_order_relaxed);
         }
         if (homeButtonDetector.update(
                 buttonPressed(kBoardProfile.buttons.homePin), nowMs)) {
@@ -115,6 +122,14 @@ bool takeConfigClick() {
 
 void clearPendingConfigClick() {
     configClickPending.store(false, std::memory_order_relaxed);
+}
+
+bool takeWidgetPageClick() {
+    return widgetPageClickPending.exchange(false, std::memory_order_relaxed);
+}
+
+void clearPendingWidgetPageClick() {
+    widgetPageClickPending.store(false, std::memory_order_relaxed);
 }
 
 bool takeFactoryResetHold() {

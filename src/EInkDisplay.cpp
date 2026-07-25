@@ -11,6 +11,7 @@
 #include "HkGlyphFont.h"
 #include "ProductConfig.h"
 #include "core/DisplayTextCore.h"
+#include "core/UiText.h"
 #include "hardware/BoardProfile.h"
 #include "hardware/SelectedDisplayDriver.h"
 
@@ -28,6 +29,13 @@ constexpr int kCustomGlyphWidth = 16;
 constexpr int kCustomGlyphHeight = 16;
 constexpr int kCustomGlyphBaselineOffset = 14;
 constexpr int kMaxPartialRefreshes = 8;
+constexpr int kLaneTextX = 12;
+constexpr int kLaneBaseTextWidth = 204;
+constexpr int kLaneValueAreaX = 224;
+constexpr int kLaneValueWidth = 76;
+constexpr int kLaneValueRightSpacing = 88;
+constexpr int kLaneRightEdge = EINK_WIDTH - 12;
+constexpr int kLaneColumnGap = 12;
 
 struct DisplayRegion {
     int x;
@@ -36,7 +44,8 @@ struct DisplayRegion {
     int h;
 };
 
-static_assert(transitink::kWidgetSlotCount == 4, "dashboard requires exactly four widget slots");
+static_assert(transitink::kWidgetsPerPage == 4,
+              "dashboard requires exactly four widgets per page");
 
 constexpr bool regionFitsPanel(const DisplayRegion& region) {
     return region.x >= 0 && region.y >= 0 && region.w > 0 && region.h > 0 &&
@@ -44,7 +53,7 @@ constexpr bool regionFitsPanel(const DisplayRegion& region) {
 }
 
 constexpr DisplayRegion kStatusRegion{0, 0, EINK_WIDTH, 42};
-constexpr DisplayRegion kLaneRegions[transitink::kWidgetSlotCount] = {
+constexpr DisplayRegion kLaneRegions[transitink::kWidgetsPerPage] = {
     {0, 42, EINK_WIDTH, 57},
     {0, 99, EINK_WIDTH, 57},
     {0, 156, EINK_WIDTH, 57},
@@ -203,18 +212,53 @@ void drawText(int x, int y, const String& text) {
     }
 }
 
-void drawTruncatedText(int x, int y, const String& text, int maxWidth) {
+transitink::DisplayTextPlan displayTextPlan(const String& text, int maxWidth) {
+    transitink::DisplayTextPlan plan;
     if (maxWidth <= 0) {
-        return;
+        return plan;
     }
     std::string source;
     source.reserve(text.length());
     source.assign(text.c_str(), text.length());
-    const transitink::DisplayTextPlan plan =
-        transitink::planTruncatedUtf8(source, maxWidth, displayCodepointWidth, nullptr);
+    return transitink::planTruncatedUtf8(
+        source, maxWidth, displayCodepointWidth, nullptr);
+}
+
+void drawTruncatedText(int x, int y, const String& text, int maxWidth) {
+    const transitink::DisplayTextPlan plan = displayTextPlan(text, maxWidth);
     if (!plan.text.empty()) {
         drawText(x, y, String(plan.text.c_str()));
     }
+}
+
+void drawRightAlignedTruncatedText(int rightX, int y, const String& text,
+                                   int maxWidth) {
+    const transitink::DisplayTextPlan plan = displayTextPlan(text, maxWidth);
+    if (!plan.text.empty()) {
+        drawText(rightX - plan.pixelWidth, y, String(plan.text.c_str()));
+    }
+}
+
+String compactLaneTitle(const String& title, int maxWidth) {
+    if (transitink::currentUiLocale() != transitink::UiLocale::EnGb ||
+        measureTextWidth(title) <= maxWidth) {
+        return title;
+    }
+    const std::string source(title.c_str(), title.length());
+    const std::string compact =
+        transitink::withoutTrailingParentheticalQualifier(source);
+    return compact == source ? title : String(compact.c_str());
+}
+
+int adaptiveLaneTextWidth(const String& firstValue, int firstValueRight) {
+    const transitink::DisplayTextPlan plan =
+        displayTextPlan(firstValue, kLaneValueWidth);
+    if (plan.text.empty()) {
+        return kLaneBaseTextWidth;
+    }
+    const int available =
+        firstValueRight - plan.pixelWidth - kLaneColumnGap - kLaneTextX;
+    return std::max(kLaneBaseTextWidth, available);
 }
 
 void drawWifiIcon(int x, int y, bool connected) {
@@ -266,17 +310,21 @@ void drawStatusBar() {
 String batteryStatusText() {
     bus_eta::BatterySnapshot status = batteryMonitor.read();
     if (!status.valid) {
-        return "電量：未能讀取";
+        return transitink::uiText(transitink::UiTextId::BatteryUnavailable);
     }
-    String text = "電量：" + String(status.percent) + "%";
+    String text =
+        String(transitink::uiText(transitink::UiTextId::BatteryLabel)) +
+        String(status.percent) + "%";
     if (status.full) {
-        return text + "（已充滿）";
+        return text + transitink::uiText(transitink::UiTextId::BatteryFull);
     }
     if (status.charging) {
-        return text + "（充電中）";
+        return text +
+               transitink::uiText(transitink::UiTextId::BatteryCharging);
     }
     if (status.powerPresent) {
-        return text + "（外接電源）";
+        return text +
+               transitink::uiText(transitink::UiTextId::BatteryExternalPower);
     }
     return text;
 }
@@ -319,23 +367,31 @@ void drawQrCode(int x, int y, const String& text) {
 }
 
 String currentClockText() {
-    constexpr const char* kWeekdayLabels[] = {
-        "星期日", "星期一", "星期二", "星期三",
-        "星期四", "星期五", "星期六",
-    };
     struct tm tmInfo;
     const time_t now = time(nullptr);
     localtime_r(&now, &tmInfo);
     char buffer[32];
-    snprintf(buffer, sizeof(buffer), "%02d/%02d %s %02d:%02d", tmInfo.tm_mon + 1,
-             tmInfo.tm_mday, kWeekdayLabels[tmInfo.tm_wday], tmInfo.tm_hour,
-             tmInfo.tm_min);
+    if (transitink::currentUiLocale() == transitink::UiLocale::EnGb) {
+        snprintf(buffer, sizeof(buffer), "%s %02d/%02d %02d:%02d",
+                 transitink::weekdayText(tmInfo.tm_wday), tmInfo.tm_mday,
+                 tmInfo.tm_mon + 1, tmInfo.tm_hour, tmInfo.tm_min);
+    } else {
+        snprintf(buffer, sizeof(buffer), "%02d/%02d %s %02d:%02d",
+                 tmInfo.tm_mon + 1, tmInfo.tm_mday,
+                 transitink::weekdayText(tmInfo.tm_wday), tmInfo.tm_hour,
+                 tmInfo.tm_min);
+    }
     return String(buffer);
 }
 
-void drawClockAndStatusBar() {
+void drawClockAndStatusBar(uint8_t pageIndex = 0, uint8_t pageCount = 1) {
     drawStatusBar();
     drawText(12, 24, currentClockText());
+    if (pageCount > 1) {
+        drawText(286, 24,
+                 String(static_cast<unsigned int>(pageIndex) + 1) + "/" +
+                     String(pageCount));
+    }
 }
 
 void markNonDashboardFrame() {
@@ -352,12 +408,12 @@ void drawLaneDivider(const DisplayRegion& region, bool visible) {
     }
 }
 
-bool shouldDrawLaneDivider(const transitink::WidgetSnapshotSet& snapshots, uint8_t slot) {
-    if (slot >= transitink::kWidgetSlotCount ||
+bool shouldDrawLaneDivider(const transitink::WidgetPageSnapshotSet& snapshots, uint8_t slot) {
+    if (slot >= transitink::kWidgetsPerPage ||
         snapshots[slot].type == transitink::WidgetType::Disabled) {
         return false;
     }
-    for (uint8_t index = slot + 1; index < transitink::kWidgetSlotCount; ++index) {
+    for (uint8_t index = slot + 1; index < transitink::kWidgetsPerPage; ++index) {
         if (snapshots[index].type != transitink::WidgetType::Disabled) {
             return true;
         }
@@ -365,7 +421,7 @@ bool shouldDrawLaneDivider(const transitink::WidgetSnapshotSet& snapshots, uint8
     return false;
 }
 
-bool hasEnabledWidget(const transitink::WidgetSnapshotSet& snapshots) {
+bool hasEnabledWidget(const transitink::WidgetPageSnapshotSet& snapshots) {
     return std::any_of(
         snapshots.begin(), snapshots.end(), [](const transitink::WidgetSnapshot& snapshot) {
             return snapshot.type != transitink::WidgetType::Disabled;
@@ -373,8 +429,10 @@ bool hasEnabledWidget(const transitink::WidgetSnapshotSet& snapshots) {
 }
 
 void drawNoWidgetsHint() {
-    const String title = "尚未設定小工具";
-    const String action = "按 Volume Up 開啟設定頁";
+    const String title =
+        transitink::uiText(transitink::UiTextId::NoWidgets);
+    const String action =
+        transitink::uiText(transitink::UiTextId::OpenSettings);
     drawText(std::max(12, (EINK_WIDTH - measureTextWidth(title)) / 2), 138, title);
     drawText(std::max(12, (EINK_WIDTH - measureTextWidth(action)) / 2), 174, action);
 }
@@ -385,26 +443,50 @@ void drawWidgetLane(uint8_t slot, const transitink::WidgetSnapshot& snapshot, bo
         return;
     }
 
-    drawTruncatedText(12, region.y + 20, String(snapshot.title.c_str()), 204);
-    drawTruncatedText(12, region.y + 42, String(snapshot.subtitle.c_str()), 204);
-
     const std::size_t valueLimit = snapshot.type == transitink::WidgetType::JourneyTime ? 1U : 2U;
-    const int firstValueX = valueLimit == 1U ? 270 : 224;
-    const int valueSpacing = 88;
+    const int firstValueRight =
+        valueLimit == 1U ? kLaneRightEdge
+                         : kLaneRightEdge - kLaneValueRightSpacing;
     const int valueY = region.y + 20;
     const int contextY = region.y + 42;
+    int titleWidth = kLaneBaseTextWidth;
+    int subtitleWidth = kLaneBaseTextWidth;
+
+    if (sleeping) {
+        titleWidth = adaptiveLaneTextWidth("-", firstValueRight);
+        subtitleWidth = titleWidth;
+    } else if (snapshot.valueCount > 0) {
+        titleWidth = adaptiveLaneTextWidth(
+            String(snapshot.values[0].text.c_str()), firstValueRight);
+        subtitleWidth = titleWidth;
+        if (snapshot.freshness == transitink::Freshness::Stale ||
+            snapshot.type == transitink::WidgetType::JourneyTime) {
+            subtitleWidth = kLaneBaseTextWidth;
+        }
+    }
+
+    const String title =
+        compactLaneTitle(String(snapshot.title.c_str()), titleWidth);
+    drawTruncatedText(kLaneTextX, valueY, title, titleWidth);
+    drawTruncatedText(
+        kLaneTextX, contextY, String(snapshot.subtitle.c_str()), subtitleWidth);
 
     if (sleeping) {
         for (std::size_t valueIndex = 0; valueIndex < valueLimit; ++valueIndex) {
-            const int valueX = firstValueX + static_cast<int>(valueIndex) * valueSpacing;
-            drawText(valueX, valueY, "-");
+            const int valueRight =
+                firstValueRight +
+                static_cast<int>(valueIndex) * kLaneValueRightSpacing;
+            drawRightAlignedTruncatedText(
+                valueRight, valueY, "-", kLaneValueWidth);
         }
         drawLaneDivider(region, drawDivider);
         return;
     }
 
     if (snapshot.freshness == transitink::Freshness::Stale && snapshot.valueCount == 0) {
-        drawTruncatedText(224, valueY, "暫未能取得資料", 164);
+        drawTruncatedText(
+            kLaneValueAreaX, valueY,
+            transitink::uiText(transitink::UiTextId::DataUnavailable), 164);
         drawLaneDivider(region, drawDivider);
         return;
     }
@@ -413,24 +495,34 @@ void drawWidgetLane(uint8_t slot, const transitink::WidgetSnapshot& snapshot, bo
         const String message = snapshot.providerMessage.empty() && snapshot.fetchedAtEpoch == 0
                                    ? String("...")
                                    : (snapshot.providerMessage.empty()
-                                          ? String("暫未能取得資料")
+                                          ? String(transitink::uiText(
+                                                transitink::UiTextId::DataUnavailable))
                                           : String(snapshot.providerMessage.c_str()));
-        drawTruncatedText(224, valueY, message, 164);
+        drawTruncatedText(kLaneValueAreaX, valueY, message, 164);
         drawLaneDivider(region, drawDivider);
         return;
     }
 
     const std::size_t shownValueCount = std::min(snapshot.valueCount, valueLimit);
     for (std::size_t valueIndex = 0; valueIndex < shownValueCount; ++valueIndex) {
-        const int valueX = firstValueX + static_cast<int>(valueIndex) * valueSpacing;
-        drawTruncatedText(valueX, valueY, String(snapshot.values[valueIndex].text.c_str()), 76);
+        const int valueRight =
+            firstValueRight +
+            static_cast<int>(valueIndex) * kLaneValueRightSpacing;
+        drawRightAlignedTruncatedText(
+            valueRight, valueY,
+            String(snapshot.values[valueIndex].text.c_str()), kLaneValueWidth);
         if (snapshot.type == transitink::WidgetType::JourneyTime &&
             snapshot.freshness == transitink::Freshness::Fresh) {
-            drawTruncatedText(valueX, contextY, String(snapshot.values[valueIndex].context.c_str()), 76);
+            drawTruncatedText(
+                kLaneValueAreaX, contextY,
+                String(snapshot.values[valueIndex].context.c_str()),
+                kLaneRightEdge - kLaneValueAreaX);
         }
     }
     if (snapshot.freshness == transitink::Freshness::Stale) {
-        drawTruncatedText(224, contextY, "資料已逾期", 164);
+        drawTruncatedText(
+            kLaneValueAreaX, contextY,
+            transitink::uiText(transitink::UiTextId::DataExpired), 164);
     }
     drawLaneDivider(region, drawDivider);
 }
@@ -514,7 +606,7 @@ void EInkDisplay::begin(bool showBootScreen) {
     canvas.clear();
     panel.begin();
     if (showBootScreen) {
-        showBoot("啟動中");
+        showBoot(transitink::uiText(transitink::UiTextId::Booting));
     }
 }
 
@@ -538,13 +630,20 @@ void EInkDisplay::showBoot(const String& message) {
 void EInkDisplay::showConfigMode(const String& networkName, const String& details, const String& qrUrl) {
     canvas.clear();
     drawStatusBar();
-    drawText(18, 38, String("設定 ") + FIRMWARE_PRODUCT_NAME);
-    drawText(18, 76, "網絡：" + networkName);
+    drawText(18, 38,
+             String(transitink::uiText(transitink::UiTextId::SettingsPrefix)) +
+                 FIRMWARE_PRODUCT_NAME);
+    drawText(18, 76,
+             String(transitink::uiText(transitink::UiTextId::NetworkLabel)) +
+                 networkName);
     drawText(18, 100, batteryStatusText());
-    drawText(18, 124, String("版本：") + FIRMWARE_VERSION);
+    drawText(18, 124,
+             String(transitink::uiText(transitink::UiTextId::VersionLabel)) +
+                 FIRMWARE_VERSION);
     drawMultilineText(18, 150, details, 22);
     drawQrCode(258, 92, qrUrl);
-    drawText(18, 260, "完成後按「儲存並重啟」");
+    drawText(18, 260,
+             transitink::uiText(transitink::UiTextId::SaveAndRestart));
     markNonDashboardFrame();
     fullRefresh();
 }
@@ -552,17 +651,23 @@ void EInkDisplay::showConfigMode(const String& networkName, const String& detail
 void EInkDisplay::showWifiStatus(const String& message) {
     canvas.clear();
     drawStatusBar();
-    drawText(18, 42, "連線狀態");
+    drawText(18, 42,
+             transitink::uiText(transitink::UiTextId::ConnectionStatus));
     drawMultilineText(18, 82, message);
     markNonDashboardFrame();
     fullRefresh();
 }
 
-void EInkDisplay::showDashboard(const transitink::WidgetSnapshotSet& snapshots, const WeatherSnapshot& weather) {
+void EInkDisplay::showDashboard(const transitink::WidgetPageSnapshotSet& snapshots,
+                                const WeatherSnapshot& weather,
+                                uint8_t pageIndex,
+                                uint8_t pageCount) {
+    widgetPageIndex_ = pageIndex;
+    widgetPageCount_ = pageCount;
     canvas.clear();
-    drawClockAndStatusBar();
+    drawClockAndStatusBar(widgetPageIndex_, widgetPageCount_);
     if (hasEnabledWidget(snapshots)) {
-        for (uint8_t slot = 0; slot < transitink::kWidgetSlotCount; ++slot) {
+        for (uint8_t slot = 0; slot < transitink::kWidgetsPerPage; ++slot) {
             const bool drawDivider = shouldDrawLaneDivider(snapshots, slot);
             drawWidgetLane(slot, snapshots[slot], false, drawDivider);
         }
@@ -575,9 +680,9 @@ void EInkDisplay::showDashboard(const transitink::WidgetSnapshotSet& snapshots, 
 }
 
 void EInkDisplay::refreshWidgetLane(uint8_t slot,
-                                    const transitink::WidgetSnapshotSet& snapshots,
+                                    const transitink::WidgetPageSnapshotSet& snapshots,
                                     const WeatherSnapshot& weather) {
-    if (slot >= transitink::kWidgetSlotCount) {
+    if (slot >= transitink::kWidgetsPerPage) {
         return;
     }
     if (!dashboardFrameActive || !previousFrameValid) {
@@ -594,7 +699,8 @@ void EInkDisplay::refreshWidgetLane(uint8_t slot,
     dashboardFrameActive = true;
 }
 
-void EInkDisplay::refreshClock(const transitink::WidgetSnapshotSet& snapshots, const WeatherSnapshot& weather) {
+void EInkDisplay::refreshClock(const transitink::WidgetPageSnapshotSet& snapshots,
+                              const WeatherSnapshot& weather) {
     if (!dashboardFrameActive || !previousFrameValid) {
         showDashboard(snapshots, weather);
         return;
@@ -602,12 +708,12 @@ void EInkDisplay::refreshClock(const transitink::WidgetSnapshotSet& snapshots, c
 
     std::memcpy(frameBuffer, previousFrameBuffer, sizeof(frameBuffer));
     clearRegion(kStatusRegion);
-    drawClockAndStatusBar();
+    drawClockAndStatusBar(widgetPageIndex_, widgetPageCount_);
     partialRefresh(kStatusRegion.x, kStatusRegion.y, kStatusRegion.w, kStatusRegion.h);
     dashboardFrameActive = true;
 }
 
-void EInkDisplay::refreshWeatherFooter(const transitink::WidgetSnapshotSet& snapshots,
+void EInkDisplay::refreshWeatherFooter(const transitink::WidgetPageSnapshotSet& snapshots,
                                        const WeatherSnapshot& weather) {
     if (!dashboardFrameActive || !previousFrameValid) {
         showDashboard(snapshots, weather);
@@ -621,11 +727,16 @@ void EInkDisplay::refreshWeatherFooter(const transitink::WidgetSnapshotSet& snap
     dashboardFrameActive = true;
 }
 
-void EInkDisplay::showSleep(const transitink::WidgetSnapshotSet& snapshots, const WeatherSnapshot& weather) {
+void EInkDisplay::showSleep(const transitink::WidgetPageSnapshotSet& snapshots,
+                            const WeatherSnapshot& weather,
+                            uint8_t pageIndex,
+                            uint8_t pageCount) {
+    widgetPageIndex_ = pageIndex;
+    widgetPageCount_ = pageCount;
     canvas.clear();
-    drawClockAndStatusBar();
+    drawClockAndStatusBar(widgetPageIndex_, widgetPageCount_);
     if (hasEnabledWidget(snapshots)) {
-        for (uint8_t slot = 0; slot < transitink::kWidgetSlotCount; ++slot) {
+        for (uint8_t slot = 0; slot < transitink::kWidgetsPerPage; ++slot) {
             const bool drawDivider = shouldDrawLaneDivider(snapshots, slot);
             drawWidgetLane(slot, snapshots[slot], true, drawDivider);
         }
@@ -638,16 +749,20 @@ void EInkDisplay::showSleep(const transitink::WidgetSnapshotSet& snapshots, cons
 }
 
 void EInkDisplay::refreshSleepStatusAndWeather(
-    const transitink::WidgetSnapshotSet& snapshots,
-    const WeatherSnapshot& weather) {
+    const transitink::WidgetPageSnapshotSet& snapshots,
+    const WeatherSnapshot& weather,
+    uint8_t pageIndex,
+    uint8_t pageCount) {
+    widgetPageIndex_ = pageIndex;
+    widgetPageCount_ = pageCount;
     if (!previousFrameValid) {
-        showSleep(snapshots, weather);
+        showSleep(snapshots, weather, widgetPageIndex_, widgetPageCount_);
         return;
     }
 
     std::memcpy(frameBuffer, previousFrameBuffer, sizeof(frameBuffer));
     clearRegion(kStatusRegion);
-    drawClockAndStatusBar();
+    drawClockAndStatusBar(widgetPageIndex_, widgetPageCount_);
     clearRegion(kFooterRegion);
     drawWeatherFooter(weather);
     partialRefresh(kStatusRegion.x, kStatusRegion.y, kStatusRegion.w, kStatusRegion.h);

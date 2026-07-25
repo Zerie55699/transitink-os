@@ -1,4 +1,5 @@
 #include "core/WidgetCore.h"
+#include "core/UiText.h"
 
 #include <cassert>
 #include <cstdint>
@@ -19,6 +20,9 @@ transitink::WidgetConfig busConfig() {
     config.bus.routeLabelTc = "11";
     config.bus.stopLabelTc = "中環碼頭（TW515）";
     config.bus.destinationLabelTc = "中環";
+    config.bus.routeLabelEn = "11";
+    config.bus.stopLabelEn = "Central Pier (TW515)";
+    config.bus.destinationLabelEn = "Central";
     return config;
 }
 
@@ -32,6 +36,9 @@ transitink::WidgetConfig railConfig() {
     config.mtr.lineOrRouteLabelTc = "屯馬綫";
     config.mtr.stationLabelTc = "元朗";
     config.mtr.directionLabelTc = "往屯門";
+    config.mtr.lineOrRouteLabelEn = "Tuen Ma Line";
+    config.mtr.stationLabelEn = "Yuen Long";
+    config.mtr.directionLabelEn = "Tuen Mun bound";
     return config;
 }
 
@@ -92,6 +99,12 @@ int main() {
     assert(staleWindowSeconds(WidgetType::GmbEta) == 180);
     assert(staleWindowSeconds(WidgetType::MtrEta) == 90);
     assert(staleWindowSeconds(WidgetType::JourneyTime) == 360);
+    auto tfl = busConfig();
+    tfl.bus.operatorId = BusOperator::Tfl;
+    assert(refreshIntervalMs(tfl) == 30000);
+    assert(staleWindowSeconds(tfl) == 30);
+    assert(refreshIntervalMs(busConfig()) == 60000);
+    assert(staleWindowSeconds(busConfig()) == 180);
 
     assert(deadlineReached(100, 100));
     assert(deadlineReached(101, 100));
@@ -284,6 +297,46 @@ int main() {
     assert(emptyJourney.outcome == ProviderOutcome::Empty);
     assert(emptyJourney.snapshot.state == WidgetState::Empty);
     assert(emptyJourney.snapshot.providerMessage == "暫無班次");
+
+    setUiLocale(UiLocale::EnGb);
+    assert(englishDisplayLabel("LEI MUK SHUE (CIRCULAR)") ==
+           "Lei Muk Shue (Circular)");
+    assert(englishDisplayLabel("TAI WO HAU BBI-TAI WO HAU STATION") ==
+           "Tai Wo Hau BBI-Tai Wo Hau Station");
+    assert(englishDisplayLabel("MTR KMB LWB DLR BBI HK NT PHASE III") ==
+           "MTR KMB LWB DLR BBI HK NT Phase III");
+    assert(englishDisplayLabel("QUEEN'S ROAD CENTRAL") ==
+           "Queen's Road Central");
+    assert(englishDisplayLabel("Tsuen Wan (Hoi Pa Street)") ==
+           "Tsuen Wan (Hoi Pa Street)");
+    assert(englishDisplayLabel("香港天文台") == "香港天文台");
+
+    auto uppercaseBusConfig = busConfig();
+    uppercaseBusConfig.bus.operatorId = BusOperator::Kmb;
+    uppercaseBusConfig.bus.destinationLabelEn = "LEI MUK SHUE (CIRCULAR)";
+    uppercaseBusConfig.bus.stopLabelEn =
+        "TAI WO HAU BBI-TAI WO HAU STATION";
+    const auto uppercaseBus =
+        configuredWidgetSnapshot(0, uppercaseBusConfig);
+    assert(uppercaseBus.title == "11 · Lei Muk Shue (Circular)");
+    assert(uppercaseBus.subtitle ==
+           "Tai Wo Hau BBI-Tai Wo Hau Station");
+
+    const auto englishBus = normalizeBusSnapshot(0, busConfig(), sortableRecords, now);
+    assert(englishBus.snapshot.title == "11 · Central");
+    assert(englishBus.snapshot.subtitle == "Central Pier");
+    assert(englishBus.snapshot.values[0].context == "Central");
+    assert(englishBus.snapshot.values[0].text == "5 min");
+    assert(configuredWidgetSnapshot(1, railConfig()).title ==
+           "Tuen Ma Line · Tuen Mun bound");
+    assert(configuredWidgetSnapshot(2, journeyConfig()).title == "紅磡");
+    assert(normalizeBusSnapshot(0, busConfig(), {}, now).snapshot.providerMessage ==
+           "No arrivals");
+    assert(normalizeJourneyTimeSnapshot(2, journeyConfig(), journeyContract, now)
+               .snapshot.values[0]
+               .text == "24 min");
+    assert(std::string(weekdayText(4)) == "Thu");
+    setUiLocale(UiLocale::ZhHk);
 
     return 0;
 }

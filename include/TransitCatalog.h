@@ -10,6 +10,7 @@ namespace transitink {
 struct TransitCatalogItem {
     const char* id;
     const char* labelTc;
+    const char* labelEn = "";
 };
 
 struct TransitCatalogGroup {
@@ -19,6 +20,7 @@ struct TransitCatalogGroup {
     std::size_t stationCount;
     const TransitCatalogItem* directions;
     std::size_t directionCount;
+    const char* labelEn = "";
 };
 
 struct TransitCatalogView {

@@ -2,12 +2,17 @@
 
 #include <Arduino.h>
 #include "ProductConfig.h"
+#include "core/TimeZoneCore.h"
+#include "core/UiText.h"
 #include "core/WidgetConfigCore.h"
 
 namespace transitink {
 
-constexpr std::size_t kConfigJsonCapacity = 8192;
+constexpr std::size_t kConfigJsonCapacity = 32768;
 constexpr std::size_t kConfigJsonSafeBytes = kConfigJsonCapacity * 4 / 5;
+// The 20 KB NVS partition can safely hold a blob of this size after its page
+// and entry overhead. Keep the serialized twelve-widget config below it.
+constexpr std::size_t kConfigBlobSafeBytes = 15 * 1024;
 constexpr std::size_t kMaxWifiSsidBytes = 32;
 constexpr std::size_t kMaxWifiCredentialBytes = 64;
 constexpr std::size_t kMaxCommonConfigTextBytes = 96;
@@ -16,9 +21,12 @@ constexpr std::size_t kMaxCommonConfigTextBytes = 96;
 
 struct DeviceConfig {
     uint16_t schemaVersion = transitink::kConfigSchemaVersion;
+    transitink::UiLocale uiLocale = transitink::UiLocale::ZhHk;
     String wifiSsid;
     String wifiPassword;
     String weatherLocationTc = "香港天文台";
+    transitink::DeviceTimeZone timeZone =
+        transitink::DeviceTimeZone::HongKong;
     bool sleepEnabled = SLEEP_ENABLED_DEFAULT;
     uint16_t wakeDurationMinutes = SLEEP_WAKE_DEFAULT_MINUTES;
     uint16_t sleepMaintenanceHours = SLEEP_MAINTENANCE_DEFAULT_HOURS;

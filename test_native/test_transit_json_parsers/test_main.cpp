@@ -39,6 +39,20 @@ transitink::WidgetConfig longWinConfig() {
     return config;
 }
 
+transitink::WidgetConfig tflConfig() {
+    transitink::WidgetConfig config;
+    config.type = transitink::WidgetType::BusEta;
+    config.bus.operatorId = transitink::BusOperator::Tfl;
+    config.bus.routeId = "24";
+    config.bus.directionId = "inbound";
+    config.bus.serviceType = "490000001A|490000003C";
+    config.bus.stopId = "490000002B";
+    config.bus.routeLabelTc = "24";
+    config.bus.stopLabelTc = "Trafalgar Square";
+    config.bus.destinationLabelTc = "Hampstead Heath";
+    return config;
+}
+
 transitink::WidgetConfig mtrConfig() {
     transitink::WidgetConfig config;
     config.type = transitink::WidgetType::MtrEta;
@@ -62,6 +76,22 @@ transitink::WidgetConfig lightRailConfig() {
     config.mtr.lineOrRouteLabelTc = "610";
     config.mtr.stationLabelTc = "元朗";
     config.mtr.directionLabelTc = "不應用作比對";
+    return config;
+}
+
+transitink::WidgetConfig londonRailConfig() {
+    transitink::WidgetConfig config;
+    config.type = transitink::WidgetType::MtrEta;
+    config.mtr.mode = transitink::RailMode::LondonRail;
+    config.mtr.lineOrRouteId = "victoria";
+    config.mtr.stationId = "940GZZLUVIC";
+    config.mtr.directionId = "outbound";
+    config.mtr.lineOrRouteLabelTc = "Victoria";
+    config.mtr.lineOrRouteLabelEn = "Victoria";
+    config.mtr.stationLabelTc = "Victoria";
+    config.mtr.stationLabelEn = "Victoria";
+    config.mtr.directionLabelTc = "Outbound";
+    config.mtr.directionLabelEn = "Outbound";
     return config;
 }
 
@@ -115,6 +145,9 @@ void test_fixture_parses_exact_records_and_normalizes_two_arrivals() {
     TEST_ASSERT_EQUAL_STRING("", error.c_str());
     TEST_ASSERT_EQUAL_UINT32(8, records.size());
     assertRecord(records[0], "11", "O", kNowEpoch + 300, "渣甸山", "", false);
+    TEST_ASSERT_EQUAL_STRING("Jardine's Lookout",
+                             records[0].destinationLabelEn.c_str());
+    TEST_ASSERT_EQUAL_STRING("", records[1].destinationLabelEn.c_str());
     assertRecord(records[1], "11", "O", kNowEpoch + 300, "渣甸山", "", false);
     assertRecord(records[2], "11", "O", kNowEpoch + 600, "渣甸山", "原定班次", false);
     assertRecord(records[3], "11", "O", 0, "渣甸山", "九巴時段", false);
@@ -424,6 +457,215 @@ void test_kmb_service_type_accepts_integer_or_numeric_string_only() {
     TEST_ASSERT_EQUAL_STRING("2", records[1].serviceType.c_str());
 }
 
+void test_tfl_route_directions_stops_and_eta_are_normalized() {
+    const char* directionJson = R"({
+      "id":"24",
+      "routeSections":[
+        {"direction":"inbound","originator":"490000001A",
+         "destination":"490000003C","originationName":"Pimlico",
+         "destinationName":"Hampstead Heath"},
+        {"direction":"inbound","originator":"490000001A",
+         "destination":"490000003C","originationName":"duplicate",
+         "destinationName":"duplicate"},
+        {"direction":"outbound","originator":"490000003C",
+         "destination":"490000001A","originationName":"Hampstead Heath",
+         "destinationName":"Pimlico"},
+        {"direction":"sideways","originator":"../bad",
+         "destination":"bad","originationName":"bad",
+         "destinationName":"bad"}
+      ]
+    })";
+    std::vector<transitink::BusCatalogRoute> directions;
+    std::string error = "sentinel";
+    TEST_ASSERT_TRUE(
+        parseTflDirectionsJson(directionJson, "24", directions, error));
+    TEST_ASSERT_EQUAL_STRING("", error.c_str());
+    TEST_ASSERT_EQUAL_UINT32(2, directions.size());
+    TEST_ASSERT_EQUAL_STRING("inbound",
+                             directions[0].directionId.c_str());
+    TEST_ASSERT_EQUAL_STRING("490000001A|490000003C",
+                             directions[0].serviceType.c_str());
+    TEST_ASSERT_EQUAL_STRING("Pimlico",
+                             directions[0].originLabelTc.c_str());
+    TEST_ASSERT_EQUAL_STRING("Hampstead Heath",
+                             directions[0].destinationLabelTc.c_str());
+
+    const char* sequenceJson = R"({
+      "orderedLineRoutes":[
+        {"naptanIds":["490000001A","490000002B","490000003C"]},
+        {"naptanIds":["490000004D","490000005E"]}
+      ],
+      "stopPointSequences":[{"stopPoint":[
+        {"id":"490000003C","name":"Hampstead Heath"},
+        {"id":"490000001A","name":"Pimlico"},
+        {"id":"490000002B","name":"Trafalgar Square"}
+      ]}]
+    })";
+    std::vector<transitink::BusCatalogStop> stops;
+    TEST_ASSERT_TRUE(parseTflRouteSequenceJson(
+        sequenceJson, "24", "inbound", "490000001A|490000003C",
+        stops, error));
+    TEST_ASSERT_EQUAL_UINT32(3, stops.size());
+    TEST_ASSERT_EQUAL_STRING("490000001A", stops[0].stopId.c_str());
+    TEST_ASSERT_EQUAL_STRING("Pimlico", stops[0].labelTc.c_str());
+    TEST_ASSERT_EQUAL_UINT16(1, stops[0].sequence);
+    TEST_ASSERT_EQUAL_STRING("490000002B", stops[1].stopId.c_str());
+    TEST_ASSERT_EQUAL_STRING("Trafalgar Square",
+                             stops[1].labelTc.c_str());
+    TEST_ASSERT_EQUAL_UINT16(2, stops[1].sequence);
+
+    const char* partialBranchJson = R"({
+      "orderedLineRoutes":[
+        {"naptanIds":["A","B","C","D"]},
+        {"naptanIds":["A","B","C","E"]}
+      ],
+      "stopPointSequences":[{"stopPoint":[
+        {"id":"A","name":"Origin"},
+        {"id":"B","name":"Shared"},
+        {"id":"C","name":"Published destination"},
+        {"id":"D","name":"Branch one"},
+        {"id":"E","name":"Branch two"}
+      ]}]
+    })";
+    TEST_ASSERT_TRUE(parseTflRouteSequenceJson(
+        partialBranchJson, "24", "inbound", "A|C", stops, error));
+    TEST_ASSERT_EQUAL_UINT32(3, stops.size());
+    TEST_ASSERT_EQUAL_STRING("A", stops[0].stopId.c_str());
+    TEST_ASSERT_EQUAL_STRING("C", stops[2].stopId.c_str());
+
+    const char* etaJson = R"([
+      {"lineId":"24","direction":"inbound","timeToStation":75,
+       "destinationName":"Hampstead Heath"},
+      {"lineId":"24","direction":"inbound","timeToStation":300,
+       "destinationName":"Hampstead Heath"},
+      {"lineId":"24","direction":"outbound","timeToStation":15,
+       "destinationName":"Pimlico"},
+      {"lineId":"88","direction":"inbound","timeToStation":20,
+       "destinationName":"Parliament Hill"},
+      {"lineId":"24","direction":"inbound","timeToStation":-1,
+       "destinationName":"invalid"}
+    ])";
+    std::vector<transitink::BusEtaRecord> records;
+    TEST_ASSERT_TRUE(parseTflEtaJson(etaJson, tflConfig().bus, kNowEpoch,
+                                     records, error));
+    TEST_ASSERT_EQUAL_UINT32(2, records.size());
+    TEST_ASSERT_EQUAL_INT(
+        static_cast<int>(transitink::BusOperator::Tfl),
+        static_cast<int>(records[0].operatorId));
+    TEST_ASSERT_EQUAL_STRING("24", records[0].routeId.c_str());
+    TEST_ASSERT_EQUAL_STRING("inbound", records[0].directionId.c_str());
+    TEST_ASSERT_EQUAL_INT64(kNowEpoch + 75, records[0].eventEpoch);
+    TEST_ASSERT_EQUAL_STRING("Hampstead Heath",
+                             records[0].destinationLabelTc.c_str());
+
+    const auto result = transitink::normalizeBusSnapshot(
+        0, tflConfig(), records, kNowEpoch);
+    TEST_ASSERT_EQUAL_INT(
+        static_cast<int>(transitink::ProviderOutcome::Success),
+        static_cast<int>(result.outcome));
+    TEST_ASSERT_EQUAL_UINT32(2, result.snapshot.valueCount);
+    TEST_ASSERT_EQUAL_STRING("2 分鐘",
+                             result.snapshot.values[0].text.c_str());
+    TEST_ASSERT_EQUAL_STRING("5 分鐘",
+                             result.snapshot.values[1].text.c_str());
+}
+
+void test_tfl_parsers_reject_wrong_shapes_and_branch() {
+    std::vector<transitink::BusCatalogRoute> directions(1);
+    std::vector<transitink::BusCatalogStop> stops(1);
+    std::vector<transitink::BusEtaRecord> records(1);
+    std::string error;
+
+    TEST_ASSERT_FALSE(
+        parseTflDirectionsJson("{\"id\":\"24\"}", "24", directions,
+                               error));
+    TEST_ASSERT_EQUAL_UINT32(0, directions.size());
+    TEST_ASSERT_FALSE(parseTflRouteSequenceJson(
+        R"({"orderedLineRoutes":[{"naptanIds":["A","B"]},{"naptanIds":["C","D"]}],"stopPointSequences":[]})",
+        "24", "inbound", "X|Y", stops, error));
+    TEST_ASSERT_EQUAL_STRING(
+        "官方服務找不到所選倫敦巴士路線分支", error.c_str());
+    TEST_ASSERT_EQUAL_UINT32(0, stops.size());
+
+    auto wrongOperator = tflConfig();
+    wrongOperator.bus.operatorId = transitink::BusOperator::Citybus;
+    TEST_ASSERT_FALSE(parseTflEtaJson("[]", wrongOperator.bus, kNowEpoch,
+                                      records, error));
+    TEST_ASSERT_EQUAL_STRING("倫敦巴士營辦商設定不正確",
+                             error.c_str());
+    TEST_ASSERT_EQUAL_UINT32(0, records.size());
+}
+
+void test_tfl_rail_catalogue_and_arrivals_are_normalized() {
+    const char* linesJson = R"([
+      {"id":"waterloo-city","name":"Waterloo & City","modeName":"tube"},
+      {"id":"victoria","name":"Victoria","modeName":"tube"},
+      {"id":"elizabeth","name":"Elizabeth line","modeName":"elizabeth-line"},
+      {"id":"24","name":"24","modeName":"bus"},
+      {"id":"../bad","name":"Bad","modeName":"tube"}
+    ])";
+    std::vector<transitink::StaticCatalogEntry> lines;
+    std::string error = "sentinel";
+    TEST_ASSERT_TRUE(parseTflRailLinesJson(linesJson, lines, error));
+    TEST_ASSERT_EQUAL_STRING("", error.c_str());
+    TEST_ASSERT_EQUAL_UINT32(3, lines.size());
+    TEST_ASSERT_EQUAL_STRING("elizabeth", lines[0].id.c_str());
+    TEST_ASSERT_EQUAL_STRING("Elizabeth line", lines[0].labelEn.c_str());
+    TEST_ASSERT_EQUAL_STRING("waterloo-city", lines[2].id.c_str());
+
+    const char* stationsJson = R"([
+      {"id":"940GZZLUVIC","commonName":"Victoria Underground Station"},
+      {"id":"940GZZLUBLR","commonName":"Blackhorse Road Underground Station"},
+      {"id":"940GZZLUVIC","commonName":"Duplicate"},
+      {"id":"../bad","commonName":"Bad Station"}
+    ])";
+    std::vector<transitink::StaticCatalogEntry> stations;
+    TEST_ASSERT_TRUE(parseTflRailStationsJson(stationsJson, stations, error));
+    TEST_ASSERT_EQUAL_UINT32(2, stations.size());
+    TEST_ASSERT_EQUAL_STRING("Blackhorse Road",
+                             stations[0].labelEn.c_str());
+    TEST_ASSERT_EQUAL_STRING("Victoria", stations[1].labelTc.c_str());
+
+    const char* arrivalsJson = R"([
+      {"lineId":"victoria","modeName":"tube","direction":"outbound",
+       "timeToStation":65,"destinationName":"Brixton Underground Station",
+       "platformName":"Southbound - Platform 2"},
+      {"lineId":"victoria","modeName":"tube","direction":"outbound",
+       "timeToStation":300,"destinationName":"Brixton",
+       "platformName":"Southbound - Platform 2"},
+      {"lineId":"victoria","modeName":"tube","direction":"inbound",
+       "timeToStation":20,"destinationName":"Walthamstow Central"},
+      {"lineId":"central","modeName":"tube","direction":"outbound",
+       "timeToStation":30,"destinationName":"Ealing Broadway"},
+      {"lineId":"victoria","modeName":"bus","direction":"outbound",
+       "timeToStation":30,"destinationName":"Invalid"}
+    ])";
+    std::vector<transitink::RailArrivalRecord> arrivals;
+    TEST_ASSERT_TRUE(parseTflRailArrivalsJson(
+        arrivalsJson, londonRailConfig().mtr, kNowEpoch, arrivals, error));
+    TEST_ASSERT_EQUAL_UINT32(2, arrivals.size());
+    TEST_ASSERT_EQUAL_INT64(kNowEpoch + 65, arrivals[0].eventEpoch);
+    TEST_ASSERT_EQUAL_STRING("Brixton",
+                             arrivals[0].destinationLabelEn.c_str());
+    TEST_ASSERT_EQUAL_STRING("Platform 2",
+                             arrivals[0].platformLabelEn.c_str());
+
+    const auto result = transitink::normalizeRailSnapshot(
+        2, londonRailConfig(), arrivals, kNowEpoch, kNowEpoch);
+    TEST_ASSERT_EQUAL_INT(
+        static_cast<int>(transitink::ProviderOutcome::Success),
+        static_cast<int>(result.outcome));
+    TEST_ASSERT_EQUAL_UINT32(2, result.snapshot.valueCount);
+    TEST_ASSERT_EQUAL_STRING("2 分鐘",
+                             result.snapshot.values[0].text.c_str());
+    TEST_ASSERT_EQUAL_STRING(
+        "Brixton · Platform 2",
+        result.snapshot.values[0].context.c_str());
+
+    TEST_ASSERT_TRUE(isOfficialTflIdentifier("waterloo-city"));
+    TEST_ASSERT_FALSE(isOfficialTflIdentifier("../waterloo-city"));
+}
+
 void test_citybus_paths_allow_only_official_identifiers_and_directions() {
     TEST_ASSERT_TRUE(isOfficialBusIdentifier("11"));
     TEST_ASSERT_TRUE(isOfficialBusIdentifier("A31"));
@@ -562,6 +804,9 @@ int main(int argc, char** argv) {
     RUN_TEST(test_valid_iso_timezones_and_leap_day_are_accepted);
     RUN_TEST(test_schema_string_fields_reject_numeric_and_missing_required_values);
     RUN_TEST(test_kmb_service_type_accepts_integer_or_numeric_string_only);
+    RUN_TEST(test_tfl_route_directions_stops_and_eta_are_normalized);
+    RUN_TEST(test_tfl_parsers_reject_wrong_shapes_and_branch);
+    RUN_TEST(test_tfl_rail_catalogue_and_arrivals_are_normalized);
     RUN_TEST(test_citybus_paths_allow_only_official_identifiers_and_directions);
     RUN_TEST(test_gmb_catalog_parsers_return_route_directions_and_stops);
     RUN_TEST(test_gmb_eta_fixture_parses_and_normalizes_arrivals);

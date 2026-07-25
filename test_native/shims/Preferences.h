@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstddef>
+#include <cstring>
+#include <vector>
 
 #include "Arduino.h"
 
@@ -24,6 +26,29 @@ public:
         return value.length();
     }
 
+    std::size_t getBytesLength(const char*) const {
+        return hasBlobValue_ ? blobValue_.size() : 0;
+    }
+
+    std::size_t getBytes(const char*, void* buffer, std::size_t maxLength) const {
+        if (!hasBlobValue_ || maxLength < blobValue_.size()) {
+            return 0;
+        }
+        std::memcpy(buffer, blobValue_.data(), blobValue_.size());
+        return blobValue_.size();
+    }
+
+    std::size_t putBytes(const char*, const void* value, std::size_t length) {
+        if (failWrites_) {
+            return 0;
+        }
+        const auto* bytes = static_cast<const unsigned char*>(value);
+        blobValue_.assign(bytes, bytes + length);
+        hasBlobValue_ = true;
+        ++writeCount_;
+        return length;
+    }
+
     bool getBool(const char*, bool defaultValue = false) const {
         return hasBoolValue_ ? boolValue_ : defaultValue;
     }
@@ -41,6 +66,8 @@ public:
     bool clear() {
         value_ = "";
         hasValue_ = false;
+        blobValue_.clear();
+        hasBlobValue_ = false;
         boolValue_ = false;
         hasBoolValue_ = false;
         return true;
@@ -49,6 +76,8 @@ public:
     static void seedTestValue(const String& value) {
         value_ = value;
         hasValue_ = true;
+        blobValue_.clear();
+        hasBlobValue_ = false;
         writeCount_ = 0;
     }
 
@@ -78,6 +107,8 @@ private:
     inline static String value_;
     inline static bool hasValue_ = false;
     inline static std::size_t writeCount_ = 0;
+    inline static std::vector<unsigned char> blobValue_;
+    inline static bool hasBlobValue_ = false;
     inline static bool boolValue_ = false;
     inline static bool hasBoolValue_ = false;
     inline static std::size_t boolWriteCount_ = 0;

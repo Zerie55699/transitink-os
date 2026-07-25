@@ -6,6 +6,7 @@
 #include "CitybusClient.h"
 #include "GmbClient.h"
 #include "KmbClient.h"
+#include "TflClient.h"
 #include "core/WidgetConfigCore.h"
 
 bool parseCatalogBusOperator(const String& operatorId, transitink::BusOperator& op);
@@ -13,7 +14,10 @@ bool parseCatalogRailMode(const String& modeId, transitink::RailMode& mode);
 
 class WidgetCatalogService {
 public:
-    WidgetCatalogService(KmbClient& kmb, CitybusClient& citybus, GmbClient& gmb);
+    WidgetCatalogService(KmbClient& kmb,
+                         CitybusClient& citybus,
+                         GmbClient& gmb,
+                         TflClient& tfl);
     bool begin();
     bool listBusRoutes(transitink::BusOperator op, bool refresh, String& json, String& error);
     bool listBusDirections(transitink::BusOperator op,
@@ -104,6 +108,7 @@ private:
     KmbClient& kmb_;
     CitybusClient& citybus_;
     GmbClient& gmb_;
+    TflClient& tfl_;
     bool fsReady_ = false;
     time_t lastUpdatedAt_ = 0;
 };

@@ -28,6 +28,8 @@ private:
     void sendConfig();
     void saveConfig();
     void scanWifiNetworks();
+    void connectWifiForSetup();
+    void sendSetupWifiStatus();
     void listBusRoutes();
     void listBusDirections();
     void listBusStops();

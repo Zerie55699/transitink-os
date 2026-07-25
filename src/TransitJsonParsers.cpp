@@ -4,10 +4,16 @@
 
 #include <ArduinoJson.h>
 
+#include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <initializer_list>
+#include <iterator>
 #include <limits>
+#include <map>
+#include <set>
 #include <string>
+#include <tuple>
 #include <utility>
 
 namespace {
@@ -277,6 +283,8 @@ bool parseEtaJson(const char* json,
         std::string eta;
         std::string destination;
         std::string remark;
+        std::string destinationEn;
+        std::string remarkEn;
         std::string serviceType;
         if (!readRequiredString(item["co"], company) ||
             !readRequiredString(item["route"], route) ||
@@ -284,6 +292,8 @@ bool parseEtaJson(const char* json,
             !readOptionalString(item, "eta", eta) ||
             !readOptionalString(item, "dest_tc", destination) ||
             !readOptionalString(item, "rmk_tc", remark) ||
+            !readOptionalString(item, "dest_en", destinationEn) ||
+            !readOptionalString(item, "rmk_en", remarkEn) ||
             (hasServiceType &&
              !readServiceType(item["service_type"], serviceType)) ||
             company != expectedCompany) {
@@ -297,10 +307,65 @@ bool parseEtaJson(const char* json,
         record.eventEpoch = parseIsoEpoch(eta);
         record.destinationLabelTc = std::move(destination);
         record.remarkTc = std::move(remark);
+        record.destinationLabelEn = std::move(destinationEn);
+        record.remarkEn = std::move(remarkEn);
         record.cancelled = record.remarkTc.find("取消") != std::string::npos;
         records.push_back(std::move(record));
     }
     return true;
+}
+
+std::string upperAscii(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char character) {
+        return static_cast<char>(std::toupper(character));
+    });
+    return value;
+}
+
+bool splitTflServiceType(const std::string& value,
+                         std::string& originator,
+                         std::string& destination) {
+    const std::size_t separator = value.find('|');
+    if (separator == std::string::npos ||
+        value.find('|', separator + 1) != std::string::npos) {
+        return false;
+    }
+    originator = value.substr(0, separator);
+    destination = value.substr(separator + 1);
+    return isOfficialBusIdentifier(originator) &&
+           isOfficialBusIdentifier(destination);
+}
+
+bool isSupportedTflRailMode(const std::string& value) {
+    return value == "tube" || value == "dlr" || value == "overground" ||
+           value == "elizabeth-line" || value == "tram";
+}
+
+std::string withoutTflStationSuffix(std::string value) {
+    static constexpr const char* kSuffixes[] = {
+        " Underground Station",
+        " Elizabeth Line Station",
+        " London Overground Station",
+        " DLR Station",
+        " Rail Station",
+        " Tram Stop",
+        " Station",
+    };
+    for (const char* suffix : kSuffixes) {
+        const std::size_t suffixLength = std::char_traits<char>::length(suffix);
+        if (value.size() > suffixLength &&
+            value.compare(value.size() - suffixLength, suffixLength, suffix) ==
+                0) {
+            value.resize(value.size() - suffixLength);
+            break;
+        }
+    }
+    return value;
+}
+
+std::string compactTflPlatformName(std::string value) {
+    const std::size_t separator = value.rfind(" - ");
+    return separator == std::string::npos ? value : value.substr(separator + 3);
 }
 
 }  // namespace
@@ -314,6 +379,21 @@ bool isOfficialBusIdentifier(const std::string& value) {
         const bool isUpper = character >= 'A' && character <= 'Z';
         const bool isLower = character >= 'a' && character <= 'z';
         if (!isDigit && !isUpper && !isLower) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool isOfficialTflIdentifier(const std::string& value) {
+    if (value.empty() || value.size() > transitink::kMaxStableIdBytes) {
+        return false;
+    }
+    for (const char character : value) {
+        const bool isDigit = character >= '0' && character <= '9';
+        const bool isUpper = character >= 'A' && character <= 'Z';
+        const bool isLower = character >= 'a' && character <= 'z';
+        if (!isDigit && !isUpper && !isLower && character != '-') {
             return false;
         }
     }
@@ -381,14 +461,17 @@ bool parseGmbDirectionsJson(
         return false;
     }
 
-    StaticJsonDocument<384> filter;
+    StaticJsonDocument<768> filter;
     filter["data"][0]["route_id"] = true;
     filter["data"][0]["region"] = true;
     filter["data"][0]["route_code"] = true;
     filter["data"][0]["description_tc"] = true;
+    filter["data"][0]["description_en"] = true;
     filter["data"][0]["directions"][0]["route_seq"] = true;
     filter["data"][0]["directions"][0]["orig_tc"] = true;
     filter["data"][0]["directions"][0]["dest_tc"] = true;
+    filter["data"][0]["directions"][0]["orig_en"] = true;
+    filter["data"][0]["directions"][0]["dest_en"] = true;
     DynamicJsonDocument document(16384);
     const DeserializationError jsonError = deserializeJson(
         document, json, DeserializationOption::Filter(filter));
@@ -406,10 +489,12 @@ bool parseGmbDirectionsJson(
         std::string parsedRegion;
         std::string parsedRouteCode;
         std::string description;
+        std::string descriptionEn;
         if (!readStringOrNonNegativeInt(route["route_id"], parsedRouteId) ||
             !readRequiredString(route["region"], parsedRegion) ||
             !readRequiredString(route["route_code"], parsedRouteCode) ||
             !readNullableString(route, "description_tc", description) ||
+            !readNullableString(route, "description_en", descriptionEn) ||
             parsedRegion != region || parsedRouteCode != routeCode ||
             !route["directions"].is<JsonArrayConst>()) {
             continue;
@@ -425,9 +510,12 @@ bool parseGmbDirectionsJson(
                                     item.destinationLabelTc)) {
                 continue;
             }
+            readNullableString(direction, "orig_en", item.originLabelEn);
+            readNullableString(direction, "dest_en", item.destinationLabelEn);
             item.region = parsedRegion;
             item.routeId = parsedRouteId;
             item.descriptionTc = description;
+            item.descriptionEn = descriptionEn;
             directions.push_back(std::move(item));
         }
     }
@@ -447,10 +535,11 @@ bool parseGmbStopsJson(const char* json,
         return false;
     }
 
-    StaticJsonDocument<192> filter;
+    StaticJsonDocument<256> filter;
     filter["data"]["route_stops"][0]["stop_seq"] = true;
     filter["data"]["route_stops"][0]["stop_id"] = true;
     filter["data"]["route_stops"][0]["name_tc"] = true;
+    filter["data"]["route_stops"][0]["name_en"] = true;
     DynamicJsonDocument document(32768);
     const DeserializationError jsonError = deserializeJson(
         document, json, DeserializationOption::Filter(filter));
@@ -470,6 +559,7 @@ bool parseGmbStopsJson(const char* json,
             !readRequiredString(stop["name_tc"], item.labelTc)) {
             continue;
         }
+        readNullableString(stop, "name_en", item.labelEn);
         stops.push_back(std::move(item));
     }
     return true;
@@ -489,12 +579,14 @@ bool parseGmbEtaJson(const char* json,
         return false;
     }
 
-    StaticJsonDocument<256> filter;
+    StaticJsonDocument<384> filter;
     filter["data"]["stop_id"] = true;
     filter["data"]["enabled"] = true;
     filter["data"]["description_tc"] = true;
+    filter["data"]["description_en"] = true;
     filter["data"]["eta"][0]["diff"] = true;
     filter["data"]["eta"][0]["remarks_tc"] = true;
+    filter["data"]["eta"][0]["remarks_en"] = true;
     DynamicJsonDocument document(8192);
     const DeserializationError jsonError = deserializeJson(
         document, json, DeserializationOption::Filter(filter));
@@ -511,6 +603,7 @@ bool parseGmbEtaJson(const char* json,
     if (!readStringOrNonNegativeInt(data["stop_id"], stopId) ||
         stopId != config.stopId || !data["enabled"].is<bool>() ||
         !readNullableString(data, "description_tc", payload.descriptionTc) ||
+        !readNullableString(data, "description_en", payload.descriptionEn) ||
         !data["eta"].is<JsonArrayConst>()) {
         error = "專線小巴到站時間資料格式錯誤";
         return false;
@@ -523,6 +616,7 @@ bool parseGmbEtaJson(const char* json,
             !readNullableString(eta, "remarks_tc", record.remarkTc)) {
             continue;
         }
+        readNullableString(eta, "remarks_en", record.remarkEn);
         record.diffMinutes = diffMinutes;
         payload.records.push_back(std::move(record));
     }
@@ -555,6 +649,431 @@ bool parseKmbEtaJson(const char* json,
     return parseEtaJson(json, config, "KMB", true,
                         "九巴及龍運到站時間資料無法解析",
                         "九巴及龍運到站時間資料格式錯誤", records, error);
+}
+
+bool parseTflDirectionsJson(
+    const char* json,
+    const std::string& route,
+    std::vector<transitink::BusCatalogRoute>& directions,
+    std::string& error) {
+    directions.clear();
+    error.clear();
+    if (!isOfficialBusIdentifier(route)) {
+        error = "倫敦巴士路線代號格式不正確";
+        return false;
+    }
+
+    DynamicJsonDocument document(16384);
+    const DeserializationError jsonError = deserializeJson(document, json);
+    if (jsonError) {
+        error = "倫敦巴士路線資料無法解析";
+        return false;
+    }
+    std::string responseRoute;
+    if (!readRequiredString(document["id"], responseRoute) ||
+        upperAscii(responseRoute) != upperAscii(route) ||
+        !document["routeSections"].is<JsonArrayConst>()) {
+        error = "倫敦巴士路線資料格式錯誤";
+        return false;
+    }
+
+    std::set<std::string> seen;
+    for (JsonObjectConst section :
+         document["routeSections"].as<JsonArrayConst>()) {
+        std::string direction;
+        std::string originator;
+        std::string destination;
+        std::string originLabel;
+        std::string destinationLabel;
+        if (!readRequiredString(section["direction"], direction) ||
+            (direction != "inbound" && direction != "outbound") ||
+            !readRequiredString(section["originator"], originator) ||
+            !readRequiredString(section["destination"], destination) ||
+            !readRequiredString(section["originationName"], originLabel) ||
+            !readRequiredString(section["destinationName"], destinationLabel) ||
+            !isOfficialBusIdentifier(originator) ||
+            !isOfficialBusIdentifier(destination)) {
+            continue;
+        }
+        const std::string serviceType = originator + "|" + destination;
+        const std::string key = direction + ":" + serviceType;
+        if (!seen.insert(key).second) {
+            continue;
+        }
+        directions.push_back(
+            {upperAscii(route), direction, serviceType, originLabel,
+             destinationLabel, originLabel, destinationLabel});
+    }
+    if (directions.empty()) {
+        error = "官方服務找不到此倫敦巴士路線方向";
+        return false;
+    }
+    std::sort(directions.begin(), directions.end(), [](const auto& lhs,
+                                                        const auto& rhs) {
+        return std::tie(lhs.directionId, lhs.serviceType) <
+               std::tie(rhs.directionId, rhs.serviceType);
+    });
+    return true;
+}
+
+bool parseTflRouteSequenceJson(
+    const char* json,
+    const std::string& route,
+    const std::string& direction,
+    const std::string& serviceType,
+    std::vector<transitink::BusCatalogStop>& stops,
+    std::string& error) {
+    stops.clear();
+    error.clear();
+    std::string expectedOrigin;
+    std::string expectedDestination;
+    if (!isOfficialBusIdentifier(route) ||
+        (direction != "inbound" && direction != "outbound") ||
+        !splitTflServiceType(serviceType, expectedOrigin,
+                             expectedDestination)) {
+        error = "倫敦巴士站牌查詢參數不正確";
+        return false;
+    }
+
+    DynamicJsonDocument document(49152);
+    const DeserializationError jsonError = deserializeJson(document, json);
+    if (jsonError) {
+        error = "倫敦巴士站牌資料無法解析";
+        return false;
+    }
+    if (!document["orderedLineRoutes"].is<JsonArrayConst>() ||
+        !document["stopPointSequences"].is<JsonArrayConst>()) {
+        error = "倫敦巴士站牌資料格式錯誤";
+        return false;
+    }
+
+    std::set<std::vector<std::string>> matchingSegments;
+    std::vector<std::string> sole;
+    std::size_t usableRouteCount = 0;
+    for (JsonObjectConst ordered :
+         document["orderedLineRoutes"].as<JsonArrayConst>()) {
+        if (!ordered["naptanIds"].is<JsonArrayConst>()) {
+            continue;
+        }
+        JsonArrayConst ids = ordered["naptanIds"].as<JsonArrayConst>();
+        if (ids.size() == 0) {
+            continue;
+        }
+        std::vector<std::string> routeIds;
+        routeIds.reserve(ids.size());
+        bool validRoute = true;
+        for (JsonVariantConst value : ids) {
+            std::string id;
+            if (!readRequiredString(value, id) ||
+                !isOfficialBusIdentifier(id)) {
+                validRoute = false;
+                break;
+            }
+            routeIds.push_back(std::move(id));
+        }
+        if (!validRoute || routeIds.empty()) {
+            continue;
+        }
+        ++usableRouteCount;
+        sole = routeIds;
+        for (auto start = routeIds.begin(); start != routeIds.end(); ++start) {
+            if (*start != expectedOrigin) {
+                continue;
+            }
+            const auto end =
+                std::find(start, routeIds.end(), expectedDestination);
+            if (end != routeIds.end()) {
+                matchingSegments.emplace(start, std::next(end));
+            }
+        }
+    }
+    std::vector<std::string> selected;
+    if (!matchingSegments.empty()) {
+        selected = *std::max_element(
+            matchingSegments.begin(), matchingSegments.end(),
+            [](const auto& lhs, const auto& rhs) {
+                return std::make_tuple(lhs.size(), lhs) <
+                       std::make_tuple(rhs.size(), rhs);
+            });
+    } else if (usableRouteCount == 1) {
+        selected = std::move(sole);
+    }
+    if (selected.empty()) {
+        error = "官方服務找不到所選倫敦巴士路線分支";
+        return false;
+    }
+
+    std::map<std::string, std::string> stationLabels;
+    for (JsonObjectConst sequence :
+         document["stopPointSequences"].as<JsonArrayConst>()) {
+        if (!sequence["stopPoint"].is<JsonArrayConst>()) {
+            continue;
+        }
+        for (JsonObjectConst station :
+             sequence["stopPoint"].as<JsonArrayConst>()) {
+            std::string id;
+            std::string label;
+            if (readRequiredString(station["id"], id) &&
+                readRequiredString(station["name"], label) &&
+                isOfficialBusIdentifier(id)) {
+                stationLabels.emplace(std::move(id), std::move(label));
+            }
+        }
+    }
+    if (selected.size() > std::numeric_limits<uint16_t>::max()) {
+        error = "倫敦巴士站牌數量超出支援範圍";
+        return false;
+    }
+    uint16_t sequence = 1;
+    for (const std::string& id : selected) {
+        const auto label = stationLabels.find(id);
+        if (label == stationLabels.end()) {
+            stops.clear();
+            error = "倫敦巴士站牌名稱資料不完整";
+            return false;
+        }
+        stops.push_back({id, label->second, sequence++, label->second});
+    }
+    if (stops.empty()) {
+        error = "倫敦巴士路線沒有可用站牌";
+        return false;
+    }
+    return true;
+}
+
+bool parseTflEtaJson(const char* json,
+                     const transitink::BusWidgetConfig& config,
+                     int64_t nowEpoch,
+                     std::vector<transitink::BusEtaRecord>& records,
+                     std::string& error) {
+    records.clear();
+    error.clear();
+    if (config.operatorId != transitink::BusOperator::Tfl) {
+        error = "倫敦巴士營辦商設定不正確";
+        return false;
+    }
+    if (nowEpoch <= 0) {
+        error = "時間尚未同步";
+        return false;
+    }
+
+    DynamicJsonDocument document(32768);
+    const DeserializationError jsonError = deserializeJson(document, json);
+    if (jsonError) {
+        error = "倫敦巴士到站時間資料無法解析";
+        return false;
+    }
+    if (!document.is<JsonArrayConst>()) {
+        error = "倫敦巴士到站時間資料格式錯誤";
+        return false;
+    }
+    for (JsonObjectConst item : document.as<JsonArrayConst>()) {
+        std::string route;
+        std::string direction;
+        std::string destination;
+        int seconds = -1;
+        if (!readRequiredString(item["lineId"], route) ||
+            !readRequiredString(item["direction"], direction) ||
+            !readRequiredInt(item["timeToStation"], seconds) ||
+            seconds < 0 ||
+            !readOptionalString(item, "destinationName", destination) ||
+            upperAscii(route) != upperAscii(config.routeId) ||
+            direction != config.directionId) {
+            continue;
+        }
+        transitink::BusEtaRecord record;
+        record.operatorId = transitink::BusOperator::Tfl;
+        record.routeId = upperAscii(config.routeId);
+        record.directionId = direction;
+        record.eventEpoch = nowEpoch + seconds;
+        record.destinationLabelTc =
+            destination.empty() ? config.destinationLabelTc : destination;
+        record.destinationLabelEn =
+            destination.empty() ? config.destinationLabelEn : destination;
+        records.push_back(std::move(record));
+    }
+    return true;
+}
+
+bool parseTflRailLinesJson(
+    const char* json,
+    std::vector<transitink::StaticCatalogEntry>& lines,
+    std::string& error) {
+    lines.clear();
+    error.clear();
+
+    StaticJsonDocument<192> filter;
+    filter[0]["id"] = true;
+    filter[0]["name"] = true;
+    filter[0]["modeName"] = true;
+    DynamicJsonDocument document(8192);
+    const DeserializationError jsonError = deserializeJson(
+        document, json, DeserializationOption::Filter(filter));
+    if (jsonError) {
+        error = "倫敦鐵路路線資料無法解析";
+        return false;
+    }
+    if (!document.is<JsonArrayConst>()) {
+        error = "倫敦鐵路路線資料格式錯誤";
+        return false;
+    }
+
+    std::set<std::string> seen;
+    for (JsonObjectConst item : document.as<JsonArrayConst>()) {
+        std::string id;
+        std::string name;
+        std::string mode;
+        if (!readRequiredString(item["id"], id) ||
+            !readRequiredString(item["name"], name) ||
+            !readRequiredString(item["modeName"], mode) ||
+            !isOfficialTflIdentifier(id) ||
+            !isSupportedTflRailMode(mode) ||
+            name.size() > transitink::kMaxStaticCatalogLabelBytes ||
+            !seen.insert(id).second) {
+            continue;
+        }
+        if (lines.size() >= transitink::kMaxStaticCatalogEntries) {
+            lines.clear();
+            error = "倫敦鐵路路線數量超出支援範圍";
+            return false;
+        }
+        lines.push_back({std::move(id), name, std::move(name)});
+    }
+    if (lines.empty()) {
+        error = "倫敦鐵路路線目錄不可為空";
+        return false;
+    }
+    std::sort(lines.begin(), lines.end(), [](const auto& lhs, const auto& rhs) {
+        return std::tie(lhs.labelEn, lhs.id) < std::tie(rhs.labelEn, rhs.id);
+    });
+    return true;
+}
+
+bool parseTflRailStationsJson(
+    const char* json,
+    std::vector<transitink::StaticCatalogEntry>& stations,
+    std::string& error) {
+    stations.clear();
+    error.clear();
+
+    DynamicJsonDocument document(24576);
+    const DeserializationError jsonError = deserializeJson(document, json);
+    if (jsonError) {
+        error = "倫敦鐵路車站資料無法解析";
+        return false;
+    }
+    if (!document.is<JsonArrayConst>()) {
+        error = "倫敦鐵路車站資料格式錯誤";
+        return false;
+    }
+
+    std::set<std::string> seen;
+    for (JsonObjectConst item : document.as<JsonArrayConst>()) {
+        std::string id;
+        std::string name;
+        if (!readRequiredString(item["id"], id) ||
+            !readRequiredString(item["commonName"], name) ||
+            !isOfficialTflIdentifier(id) || !seen.insert(id).second) {
+            continue;
+        }
+        name = withoutTflStationSuffix(std::move(name));
+        if (name.empty() ||
+            name.size() > transitink::kMaxStaticCatalogLabelBytes) {
+            continue;
+        }
+        if (stations.size() >= transitink::kMaxStaticCatalogEntries) {
+            stations.clear();
+            error = "倫敦鐵路車站數量超出支援範圍";
+            return false;
+        }
+        stations.push_back({std::move(id), name, std::move(name)});
+    }
+    if (stations.empty()) {
+        error = "倫敦鐵路路線沒有可用車站";
+        return false;
+    }
+    std::sort(stations.begin(), stations.end(),
+              [](const auto& lhs, const auto& rhs) {
+                  return std::tie(lhs.labelEn, lhs.id) <
+                         std::tie(rhs.labelEn, rhs.id);
+              });
+    return true;
+}
+
+bool parseTflRailArrivalsJson(
+    const char* json,
+    const transitink::MtrWidgetConfig& config,
+    int64_t nowEpoch,
+    std::vector<transitink::RailArrivalRecord>& records,
+    std::string& error) {
+    records.clear();
+    error.clear();
+    if (config.mode != transitink::RailMode::LondonRail ||
+        !isOfficialTflIdentifier(config.lineOrRouteId) ||
+        !isOfficialTflIdentifier(config.stationId) ||
+        (config.directionId != "inbound" &&
+         config.directionId != "outbound")) {
+        error = "倫敦鐵路設定不正確";
+        return false;
+    }
+    if (nowEpoch <= 0) {
+        error = "時間尚未同步";
+        return false;
+    }
+
+    StaticJsonDocument<384> filter;
+    filter[0]["lineId"] = true;
+    filter[0]["modeName"] = true;
+    filter[0]["direction"] = true;
+    filter[0]["timeToStation"] = true;
+    filter[0]["destinationName"] = true;
+    filter[0]["platformName"] = true;
+    DynamicJsonDocument document(24576);
+    const DeserializationError jsonError = deserializeJson(
+        document, json, DeserializationOption::Filter(filter));
+    if (jsonError) {
+        error = "倫敦鐵路到站時間資料無法解析";
+        return false;
+    }
+    if (!document.is<JsonArrayConst>()) {
+        error = "倫敦鐵路到站時間資料格式錯誤";
+        return false;
+    }
+
+    for (JsonObjectConst item : document.as<JsonArrayConst>()) {
+        std::string line;
+        std::string mode;
+        std::string direction;
+        std::string destination;
+        std::string platform;
+        int seconds = -1;
+        if (!readRequiredString(item["lineId"], line) ||
+            !readRequiredString(item["modeName"], mode) ||
+            !readRequiredString(item["direction"], direction) ||
+            !readRequiredInt(item["timeToStation"], seconds) ||
+            !readNullableString(item, "destinationName", destination) ||
+            !readNullableString(item, "platformName", platform) ||
+            line != config.lineOrRouteId ||
+            !isSupportedTflRailMode(mode) ||
+            direction != config.directionId || seconds < 0 ||
+            seconds > 24 * 60 * 60) {
+            continue;
+        }
+        destination = withoutTflStationSuffix(std::move(destination));
+        platform = compactTflPlatformName(std::move(platform));
+        transitink::RailArrivalRecord record;
+        record.mode = transitink::RailMode::LondonRail;
+        record.lineOrRouteId = config.lineOrRouteId;
+        record.stationId = config.stationId;
+        record.directionId = config.directionId;
+        record.eventEpoch = nowEpoch + seconds;
+        record.destinationLabelTc = destination;
+        record.destinationLabelEn = std::move(destination);
+        record.platformLabelTc = platform;
+        record.platformLabelEn = std::move(platform);
+        records.push_back(std::move(record));
+    }
+    return true;
 }
 
 bool parseMtrNextTrainJson(
@@ -672,9 +1191,22 @@ bool parseMtrNextTrainJson(
             record.stationId = config.stationId;
             record.directionId = direction;
             record.eventEpoch = parseHongKongEpoch(arrivalTime);
-            record.destinationLabelTc = destination == nullptr ? "" : destination->labelTc;
+            record.destinationLabelTc =
+                destination == nullptr || destination->labelTc == nullptr
+                    ? ""
+                    : destination->labelTc;
+            record.destinationLabelEn =
+                destination == nullptr || destination->labelEn == nullptr
+                    ? ""
+                    : destination->labelEn;
             record.platformLabelTc = platform + " 號月台";
+            record.platformLabelEn = "Platform " + platform;
             record.messageTc = serviceMessage;
+            record.messageEn =
+                delayed ? "Train service delayed"
+                        : (message == "successful"
+                               ? ""
+                               : "Please check the latest train service arrangements");
             record.valid = validValue == "Y" && record.eventEpoch > 0 &&
                            destination != nullptr;
             records.push_back(std::move(record));
@@ -790,8 +1322,12 @@ bool parseLightRailJson(
             record.directionId = std::move(directionId);
             record.eventEpoch = eventEpoch;
             record.destinationLabelTc = std::move(destinationTc);
+            record.destinationLabelEn = std::move(destinationEn);
             record.platformLabelTc = std::to_string(platformId) + " 號月台";
+            record.platformLabelEn =
+                "Platform " + std::to_string(platformId);
             record.messageTc = stopped == 0 ? "" : "列車服務暫停";
+            record.messageEn = stopped == 0 ? "" : "Train service suspended";
             record.cancelled = stopped != 0;
             record.valid = mapped && usableTime;
             records.push_back(std::move(record));

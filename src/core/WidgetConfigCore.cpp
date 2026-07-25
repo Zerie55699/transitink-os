@@ -63,6 +63,8 @@ const char* busOperatorId(BusOperator value) {
             return "lwb";
         case BusOperator::Citybus:
             return "ctb";
+        case BusOperator::Tfl:
+            return "tfl";
     }
     return "";
 }
@@ -74,6 +76,8 @@ bool parseBusOperatorId(const std::string& value, BusOperator& out) {
         out = BusOperator::LongWin;
     } else if (value == "ctb") {
         out = BusOperator::Citybus;
+    } else if (value == "tfl") {
+        out = BusOperator::Tfl;
     } else {
         return false;
     }
@@ -86,6 +90,8 @@ const char* railModeId(RailMode value) {
             return "heavy_rail";
         case RailMode::LightRail:
             return "light_rail";
+        case RailMode::LondonRail:
+            return "london_rail";
     }
     return "";
 }
@@ -95,6 +101,8 @@ bool parseRailModeId(const std::string& value, RailMode& out) {
         out = RailMode::HeavyRail;
     } else if (value == "light_rail") {
         out = RailMode::LightRail;
+    } else if (value == "london_rail") {
+        out = RailMode::LondonRail;
     } else {
         return false;
     }
@@ -106,6 +114,9 @@ bool isGmbRegionId(const std::string& value) {
 }
 
 bool isWidgetConfigValid(const WidgetConfig& widget) {
+    const auto optionalLabelValid = [](const std::string& value) {
+        return value.empty() || isLabelValid(value);
+    };
     switch (widget.type) {
         case WidgetType::Disabled:
             return true;
@@ -115,7 +126,10 @@ bool isWidgetConfigValid(const WidgetConfig& widget) {
                    isRequiredIdValid(widget.bus.directionId) &&
                    isRequiredIdValid(widget.bus.serviceType) && isRequiredIdValid(widget.bus.stopId) &&
                    isLabelValid(widget.bus.routeLabelTc) && isLabelValid(widget.bus.stopLabelTc) &&
-                   isLabelValid(widget.bus.destinationLabelTc);
+                   isLabelValid(widget.bus.destinationLabelTc) &&
+                   optionalLabelValid(widget.bus.routeLabelEn) &&
+                   optionalLabelValid(widget.bus.stopLabelEn) &&
+                   optionalLabelValid(widget.bus.destinationLabelEn);
         case WidgetType::GmbEta:
             return isGmbRegionId(widget.gmb.region) &&
                    isRequiredIdValid(widget.gmb.routeCode) &&
@@ -125,26 +139,68 @@ bool isWidgetConfigValid(const WidgetConfig& widget) {
                    isRequiredNumericIdValid(widget.gmb.stopSeq) &&
                    isLabelValid(widget.gmb.routeLabelTc) &&
                    isLabelValid(widget.gmb.stopLabelTc) &&
-                   isLabelValid(widget.gmb.directionLabelTc);
+                   isLabelValid(widget.gmb.directionLabelTc) &&
+                   optionalLabelValid(widget.gmb.routeLabelEn) &&
+                   optionalLabelValid(widget.gmb.stopLabelEn) &&
+                   optionalLabelValid(widget.gmb.directionLabelEn);
         case WidgetType::MtrEta:
             return railModeId(widget.mtr.mode)[0] != '\0' &&
                    isRequiredIdValid(widget.mtr.lineOrRouteId) &&
                    isRequiredIdValid(widget.mtr.stationId) && isRequiredIdValid(widget.mtr.directionId) &&
                    isLabelValid(widget.mtr.lineOrRouteLabelTc) && isLabelValid(widget.mtr.stationLabelTc) &&
-                   isLabelValid(widget.mtr.directionLabelTc);
+                   isLabelValid(widget.mtr.directionLabelTc) &&
+                   optionalLabelValid(widget.mtr.lineOrRouteLabelEn) &&
+                   optionalLabelValid(widget.mtr.stationLabelEn) &&
+                   optionalLabelValid(widget.mtr.directionLabelEn);
         case WidgetType::JourneyTime:
             return isRequiredIdValid(widget.journeyTime.locationId) &&
                    isRequiredIdValid(widget.journeyTime.destinationId) &&
                    isLabelValid(widget.journeyTime.locationLabelTc) &&
-                   isLabelValid(widget.journeyTime.destinationLabelTc);
+                   isLabelValid(widget.journeyTime.destinationLabelTc) &&
+                   optionalLabelValid(widget.journeyTime.locationLabelEn) &&
+                   optionalLabelValid(widget.journeyTime.destinationLabelEn);
     }
     return false;
+}
+
+bool widgetPageHasEnabled(const WidgetSlots& widgets, std::size_t page) {
+    if (page >= kWidgetPageCount) return false;
+    const std::size_t start = widgetPageStart(page);
+    for (std::size_t offset = 0; offset < kWidgetsPerPage; ++offset) {
+        if (widgets[start + offset].type != WidgetType::Disabled) return true;
+    }
+    return false;
+}
+
+std::size_t enabledWidgetPageCount(const WidgetSlots& widgets) {
+    std::size_t count = 0;
+    for (std::size_t page = 0; page < kWidgetPageCount; ++page) {
+        if (widgetPageHasEnabled(widgets, page)) ++count;
+    }
+    return count;
+}
+
+std::size_t firstEnabledWidgetPage(const WidgetSlots& widgets) {
+    for (std::size_t page = 0; page < kWidgetPageCount; ++page) {
+        if (widgetPageHasEnabled(widgets, page)) return page;
+    }
+    return 0;
+}
+
+std::size_t nextEnabledWidgetPage(const WidgetSlots& widgets, std::size_t currentPage) {
+    if (currentPage >= kWidgetPageCount) currentPage = 0;
+    for (std::size_t offset = 1; offset <= kWidgetPageCount; ++offset) {
+        const std::size_t candidate = (currentPage + offset) % kWidgetPageCount;
+        if (widgetPageHasEnabled(widgets, candidate)) return candidate;
+    }
+    return currentPage;
 }
 
 WidgetSlots migrateLegacyRoutes(const std::vector<bus_eta::RouteSelection>& routes,
                                 const std::string& stopNameTc) {
     WidgetSlots slots{};
-    const std::size_t count = routes.size() < slots.size() ? routes.size() : slots.size();
+    const std::size_t count =
+        routes.size() < kWidgetsPerPage ? routes.size() : kWidgetsPerPage;
     for (std::size_t index = 0; index < count; ++index) {
         const auto& route = routes[index];
         auto& widget = slots[index];

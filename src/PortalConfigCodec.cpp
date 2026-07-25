@@ -19,6 +19,9 @@ void writeWidget(JsonObject item, const transitink::WidgetConfig& widget) {
         bus["route_label_tc"] = widget.bus.routeLabelTc.c_str();
         bus["stop_label_tc"] = widget.bus.stopLabelTc.c_str();
         bus["destination_label_tc"] = widget.bus.destinationLabelTc.c_str();
+        bus["route_label_en"] = widget.bus.routeLabelEn.c_str();
+        bus["stop_label_en"] = widget.bus.stopLabelEn.c_str();
+        bus["destination_label_en"] = widget.bus.destinationLabelEn.c_str();
     } else if (widget.type == transitink::WidgetType::GmbEta) {
         JsonObject gmb = item.createNestedObject("gmb");
         gmb["region"] = widget.gmb.region.c_str();
@@ -30,6 +33,9 @@ void writeWidget(JsonObject item, const transitink::WidgetConfig& widget) {
         gmb["route_label_tc"] = widget.gmb.routeLabelTc.c_str();
         gmb["stop_label_tc"] = widget.gmb.stopLabelTc.c_str();
         gmb["direction_label_tc"] = widget.gmb.directionLabelTc.c_str();
+        gmb["route_label_en"] = widget.gmb.routeLabelEn.c_str();
+        gmb["stop_label_en"] = widget.gmb.stopLabelEn.c_str();
+        gmb["direction_label_en"] = widget.gmb.directionLabelEn.c_str();
     } else if (widget.type == transitink::WidgetType::MtrEta) {
         JsonObject mtr = item.createNestedObject("mtr");
         mtr["mode"] = transitink::railModeId(widget.mtr.mode);
@@ -39,12 +45,17 @@ void writeWidget(JsonObject item, const transitink::WidgetConfig& widget) {
         mtr["line_or_route_label_tc"] = widget.mtr.lineOrRouteLabelTc.c_str();
         mtr["station_label_tc"] = widget.mtr.stationLabelTc.c_str();
         mtr["direction_label_tc"] = widget.mtr.directionLabelTc.c_str();
+        mtr["line_or_route_label_en"] = widget.mtr.lineOrRouteLabelEn.c_str();
+        mtr["station_label_en"] = widget.mtr.stationLabelEn.c_str();
+        mtr["direction_label_en"] = widget.mtr.directionLabelEn.c_str();
     } else if (widget.type == transitink::WidgetType::JourneyTime) {
         JsonObject journey = item.createNestedObject("journey_time");
         journey["location_id"] = widget.journeyTime.locationId.c_str();
         journey["destination_id"] = widget.journeyTime.destinationId.c_str();
         journey["location_label_tc"] = widget.journeyTime.locationLabelTc.c_str();
         journey["destination_label_tc"] = widget.journeyTime.destinationLabelTc.c_str();
+        journey["location_label_en"] = widget.journeyTime.locationLabelEn.c_str();
+        journey["destination_label_en"] = widget.journeyTime.destinationLabelEn.c_str();
     }
 }
 
@@ -59,6 +70,8 @@ bool encodePortalConfig(const DeviceConfig& config,
     outJson = "";
     DynamicJsonDocument doc(transitink::kConfigJsonCapacity);
     doc["schema_version"] = transitink::kConfigSchemaVersion;
+    doc["ui_locale"] = transitink::uiLocaleId(config.uiLocale);
+    doc["time_zone"] = transitink::deviceTimeZoneId(config.timeZone);
     doc["wifi_ssid"] = config.wifiSsid;
     doc["wifi_password_set"] = config.wifiPassword.length() > 0;
     doc["weather_location_tc"] = config.weatherLocationTc;

@@ -301,12 +301,16 @@ bool CitybusClient::fetchStopLabels(
         }
         const std::string returnedStop = data["stop"].as<const char*>();
         const std::string label = data["name_tc"].as<const char*>();
+        const std::string labelEn =
+            data["name_en"].is<const char*>()
+                ? data["name_en"].as<const char*>()
+                : "";
         if (returnedStop != stopId || label.empty() || label.size() > 96) {
             complete = false;
             lastError = "城巴站名資料不正確";
             continue;
         }
-        labels.push_back({returnedStop, label});
+        labels.push_back({returnedStop, label, labelEn});
     }
     error = complete ? "" : lastError;
     return complete;
