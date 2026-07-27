@@ -12,9 +12,12 @@
     <title>安裝 TransitInk OS</title>
     <meta
       name="description"
-      content="選擇支援的電子紙裝置，透過瀏覽器安裝 TransitInk OS，並查看首次設定及基本操作。"
+      content="選擇支援的電子紙裝置，透過瀏覽器安裝 TransitInk OS，並查看安裝步驟、首次設定及按鍵操作。"
     >
-    <link rel="stylesheet" href="./styles.css?v=4b5dd0be">
+    <link rel="icon" href="./assets/favicon.ico?v=ae530a96" sizes="64x64">
+    <link rel="icon" href="./assets/favicon.svg?v=1b97eefe" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png?v=4a73ee56">
+    <link rel="stylesheet" href="./styles.css?v=21483ca7">
     <script type="module" src="./esp-web-tools/vendor/install-button.js"></script>
     <script type="module" src="./app.js?v=1d0b77f0"></script>
   </head>
@@ -23,13 +26,19 @@
 
     <header class="site-header">
       <a class="brand" href="#top" aria-label="TransitInk OS 首頁">
-        <span class="brand-mark" aria-hidden="true"><span></span></span>
-        <span>TransitInk OS</span>
+        <img
+          class="brand-logo"
+          src="./assets/transitink-logo.svg?v=f7d91133"
+          width="160"
+          height="32"
+          alt=""
+        >
       </a>
       <nav class="site-nav" aria-label="頁面導覽">
         <a href="#installer">安裝</a>
-        <a href="#operation">基本操作</a>
         <a href="#setup">首次設定</a>
+        <a href="#controls">按鍵操作</a>
+        <a href="#features">功能介紹</a>
       </nav>
       <a
         class="source-link"
@@ -45,11 +54,11 @@
           <p class="eyebrow">原始碼公開的電子紙交通資訊系統</p>
           <h1 id="hero-title">將 TransitInk OS 安裝到你的裝置</h1>
           <p class="hero-summary">
-            透過瀏覽器更新韌體，安裝後即可設定四個交通資訊小工具。
+            透過瀏覽器更新韌體，安裝後即可設定三頁共十二個交通資訊小工具。
           </p>
           <div class="hero-actions">
             <a class="button button-primary" href="#installer">開始安裝</a>
-            <a class="button button-secondary" href="#operation">查看操作簡介</a>
+            <a class="button button-secondary" href="#controls">查看按鍵操作</a>
           </div>
         </div>
 
@@ -149,9 +158,9 @@
         </div>
       </section>
 
-      <section class="operation-section shell" id="operation" aria-labelledby="operation-title">
+      <section class="operation-section shell" id="install-steps" aria-labelledby="operation-title">
         <div class="section-intro compact-intro">
-          <h2 id="operation-title">基本操作</h2>
+          <h2 id="operation-title">安裝步驟</h2>
           <p>整個安裝在瀏覽器內完成，一般只需數分鐘。</p>
         </div>
         <ol class="procedure">
@@ -186,7 +195,7 @@
             裝置首次啟動時會建立設定用 Wi-Fi。手機或電腦不需要安裝額外應用程式。
           </p>
           <p>
-            完成 Wi-Fi 設定後，按裝置的 Volume 鍵會在目前網絡開啟自架設定頁；
+            完成 Wi-Fi 設定後，按裝置的 Volume Up 鍵會在目前網絡開啟自架設定頁；
             裝置畫面會顯示本機網址及附有驗證路徑的 QR code。
           </p>
           <div class="setup-addresses">
@@ -214,7 +223,7 @@
             </li>
             <li>
               <strong>安排主畫面</strong>
-              <span>選擇四個小工具、排列次序，或停用不需要的位置。</span>
+              <span>設定最多三頁小工具、排列次序，或停用不需要的位置。</span>
             </li>
             <li>
               <strong>設定更新</strong>
@@ -224,40 +233,98 @@
         </div>
       </section>
 
-      <section class="widgets-section shell" aria-labelledby="widgets-title">
-        <div class="section-intro compact-intro">
-          <h2 id="widgets-title">可顯示的交通資訊</h2>
-          <p>每個位置均可獨立選擇資料來源及路線。</p>
+      <section class="controls-section shell" id="controls" aria-labelledby="controls-title">
+        <div class="section-intro controls-intro">
+          <h2 id="controls-title">按鍵操作</h2>
+          <p>三個實體按鍵負責喚醒、開啟設定及切換頁面，毋須進入多層選單。</p>
         </div>
-        <div class="widget-grid">
-          <article>
-            <span aria-hidden="true">巴</span>
+
+        <div class="controls-layout">
+          <figure class="controls-visual">
+            <img
+              src="./assets/zectrix-note4-controls.png?v=53ca1450"
+              width="1024"
+              height="1536"
+              loading="lazy"
+              alt="Zectrix Note 4 按鍵操作示意：大圓按鈕喚醒裝置；Volume Up 開啟設定頁；Volume Down 循環切換最多三頁小工具；同時按住 Volume Up 及 Volume Down 五秒重設系統"
+            >
+          </figure>
+
+          <div class="control-reference" aria-label="按鍵操作摘要">
+            <div class="control-reference-heading">
+              <h3>常用操作</h3>
+              <p>短按即可完成日常操作。重設只適用於需要清除全部設定的情況。</p>
+            </div>
+            <dl>
+              <div>
+                <dt>喚醒鍵</dt>
+                <dd><strong>大圓按鈕</strong><span>短按喚醒裝置</span></dd>
+              </div>
+              <div>
+                <dt>設定鍵</dt>
+                <dd><strong>Volume Up</strong><span>開啟設定頁或返回主畫面</span></dd>
+              </div>
+              <div>
+                <dt>小工具鍵</dt>
+                <dd><strong>Volume Down</strong><span>循環切換有內容的小工具頁面</span></dd>
+              </div>
+              <div class="control-reset">
+                <dt>重設系統</dt>
+                <dd><strong>Volume Up + Volume Down</strong><span>同時按住 5 秒，清除設定並恢復預設值</span></dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+      </section>
+
+      <section class="widgets-section shell" id="features" aria-labelledby="widgets-title">
+        <div class="section-intro compact-intro">
+          <h2 id="widgets-title">功能介紹</h2>
+          <p>可顯示香港與倫敦的交通到站資訊及天氣，並支援多頁小工具。</p>
+        </div>
+
+        <div class="feature-showcase">
+          <article class="feature-lead">
+            <span class="feature-metric" aria-hidden="true">3 × 4</span>
             <div>
-              <h3>巴士 ETA</h3>
-              <p>九巴、龍運及城巴路線。</p>
+              <h3>三頁小工具</h3>
+              <p>
+                每頁顯示四個資訊位置。按 Volume Down 循環切換有內容的頁面，
+                最多可設定十二個小工具。
+              </p>
             </div>
           </article>
-          <article>
-            <span aria-hidden="true">小</span>
-            <div>
-              <h3>專線小巴 ETA</h3>
-              <p>以路線代號搜尋方向及站牌。</p>
-            </div>
-          </article>
-          <article>
-            <span aria-hidden="true">鐵</span>
-            <div>
-              <h3>港鐵及輕鐵</h3>
-              <p>查看列車方向及預計到站時間。</p>
-            </div>
-          </article>
-          <article>
-            <span aria-hidden="true">路</span>
-            <div>
-              <h3>行車時間</h3>
-              <p>運輸署主要路段行車時間。</p>
-            </div>
-          </article>
+
+          <div class="feature-list">
+            <article>
+              <span aria-hidden="true">港</span>
+              <div>
+                <h3>香港交通</h3>
+                <p>九巴、龍運、城巴、專線小巴、港鐵、輕鐵及主要路段行車時間。</p>
+              </div>
+            </article>
+            <article>
+              <span aria-hidden="true">倫</span>
+              <div>
+                <h3>倫敦交通</h3>
+                <p>倫敦巴士及倫敦鐵路即時到站資訊。</p>
+              </div>
+            </article>
+            <article>
+              <span aria-hidden="true">天</span>
+              <div>
+                <h3>天氣</h3>
+                <p>支援顯示天氣。</p>
+              </div>
+            </article>
+            <article>
+              <span aria-hidden="true">省</span>
+              <div>
+                <h3>更新及省電</h3>
+                <p>可手動更新交通資料，並設定睡眠期間更新或每日定時喚醒。</p>
+              </div>
+            </article>
+          </div>
         </div>
       </section>
 

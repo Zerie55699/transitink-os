@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-labelledby="title">
+  <title id="title">TransitInk OS</title>
+  <style>
+    .ink {
+      fill: #151c24;
+      stroke: #151c24;
+    }
+
+    .screen {
+      fill: #eef2f5;
+      stroke: #151c24;
+    }
+
+    .tile {
+      fill: #eef2f5;
+    }
+
+    .muted {
+      fill: #66717d;
+    }
+
+    .accent {
+      fill: #309fd4;
+      stroke: #247ca8;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .ink {
+        fill: #edf3f8;
+        stroke: #edf3f8;
+      }
+
+      .screen {
+        fill: #1d2731;
+        stroke: #edf3f8;
+      }
+
+      .tile {
+        fill: #151c24;
+      }
+
+      .muted {
+        fill: #9ca9b5;
+      }
+
+      .accent {
+        fill: #69bce5;
+        stroke: #8acced;
+      }
+    }
+  </style>
+
+  <rect class="tile" width="80" height="80" rx="18"/>
+
+  <g transform="translate(5 10) scale(.88)">
+    <rect class="screen" x="1.5" y="6.5" width="68" height="51" rx="8" stroke-width="3"/>
+
+    <g class="muted" opacity=".32">
+      <circle cx="10" cy="16" r="1.3"/>
+      <circle cx="16" cy="16" r="1.3"/>
+      <circle cx="22" cy="16" r="1.3"/>
+      <circle cx="10" cy="22" r="1.3"/>
+      <circle cx="16" cy="22" r="1.3"/>
+      <circle cx="22" cy="22" r="1.3"/>
+      <circle cx="10" cy="46" r="1.3"/>
+      <circle cx="16" cy="46" r="1.3"/>
+      <circle cx="22" cy="46" r="1.3"/>
+      <circle cx="10" cy="52" r="1.3"/>
+      <circle cx="16" cy="52" r="1.3"/>
+      <circle cx="22" cy="52" r="1.3"/>
+    </g>
+
+    <path class="ink" d="M2 25h12v-5h8v3h10l5 6-4 3-4-5h-8v3h-7v-2H2z" stroke="none"/>
+    <path class="ink" d="M40 38l5 6h8v-3h7v3h8v-5l11 9-11 9v-5h-8v3h-8v-3H42l-7-9z" stroke="none"/>
+
+    <circle class="screen" cx="20" cy="25" r="7.5" stroke-width="2"/>
+    <circle class="accent" cx="39" cy="36" r="7.5" stroke-width="1.5"/>
+    <circle class="screen" cx="59" cy="48" r="7.5" stroke-width="2"/>
+  </g>
+</svg>
