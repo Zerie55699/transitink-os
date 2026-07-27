@@ -13,9 +13,6 @@ jobs:
   analyze-cpp:
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    env:
-      PLATFORMIO_CORE_DIR: ${{ runner.temp }}/platformio
-      PLATFORMIO_WORKSPACE_DIR: ${{ runner.temp }}/transitink-pio
     permissions:
       contents: read
       security-events: write
@@ -39,6 +36,9 @@ jobs:
         run: scripts/install_tools.sh
 
       - name: Build firmware for analysis
+        env:
+          PLATFORMIO_CORE_DIR: ${{ runner.temp }}/platformio
+          PLATFORMIO_WORKSPACE_DIR: ${{ runner.temp }}/transitink-pio
         run: .venv/bin/platformio run -e zectrix_note4
 
       - name: Analyze
