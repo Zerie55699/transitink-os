@@ -159,6 +159,7 @@ class ReleasePackagingTests(unittest.TestCase):
         self.assertIn("會清除裝置設定", page)
         self.assertIn("更新韌體並保留設定", page)
         self.assertIn("保留裝置設定", page)
+        self.assertIn("如果設定頁沒有「檢查韌體更新」", page)
         self.assertIn('href="#firmware-update">查看更新步驟</a>', page)
         self.assertIn("更新並保留設定", page)
         self.assertIn("更新不在本頁刷寫", page)

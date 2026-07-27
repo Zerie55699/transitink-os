@@ -17,7 +17,7 @@
     <link rel="icon" href="./assets/favicon.ico?v=ae530a96" sizes="64x64">
     <link rel="icon" href="./assets/favicon.svg?v=1b97eefe" type="image/svg+xml">
     <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png?v=4a73ee56">
-    <link rel="stylesheet" href="./styles.css?v=22c7e86e">
+    <link rel="stylesheet" href="./styles.css?v=386cfe62">
     <script type="module" src="./esp-web-tools/vendor/install-button.js"></script>
     <script type="module" src="./esp-web-tools/full-erase-policy.js?v=7e70905b"></script>
     <script type="module" src="./app.js?v=eb9742cc"></script>
@@ -96,7 +96,7 @@
             <div class="install-path-copy">
               <p class="install-path-context">新裝置或需要重新安裝</p>
               <h3>首次安裝／清除安裝</h3>
-              <p>
+              <p class="install-path-description">
                 由瀏覽器完整寫入 TransitInk OS。此方式會清除現有韌體、Wi-Fi、
                 小工具及路線設定。
               </p>
@@ -108,12 +108,15 @@
           <article class="install-path-card install-path-card-update">
             <span class="install-path-index" aria-hidden="true">02</span>
             <div class="install-path-copy">
-              <p class="install-path-context">已安裝 TransitInk OS</p>
+              <p class="install-path-context">設定頁已提供韌體更新</p>
               <h3>更新韌體並保留設定</h3>
-              <p>
+              <p class="install-path-description">
                 由裝置本機設定頁下載及安裝新版本，保留 Wi-Fi、小工具及路線設定。
               </p>
               <strong class="install-path-impact">保留裝置設定</strong>
+              <p class="install-path-requirement">
+                如果設定頁沒有「檢查韌體更新」，請先使用完整安裝；首次轉換會清除現有設定。
+              </p>
             </div>
             <a class="button button-primary" href="#firmware-update">查看更新步驟</a>
           </article>
@@ -201,11 +204,14 @@
 
       <section class="operation-section shell" id="firmware-update" aria-labelledby="firmware-update-title">
         <div class="section-intro compact-intro">
-          <p class="eyebrow">已安裝 TransitInk OS</p>
+          <p class="eyebrow">設定頁已提供韌體更新</p>
           <h2 id="firmware-update-title">更新韌體並保留設定</h2>
           <p>
             更新不在本頁刷寫。請由裝置本機設定頁下載及安裝，
             Wi-Fi、小工具及路線設定會保留。
+          </p>
+          <p class="update-requirement">
+            如果設定頁沒有「檢查韌體更新」，目前版本尚未支援此方式，請使用上方的完整安裝。
           </p>
         </div>
         <ol class="procedure">

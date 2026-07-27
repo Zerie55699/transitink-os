@@ -372,7 +372,7 @@ p {
   font-weight: 700;
 }
 
-.install-path-copy > p:last-of-type {
+.install-path-description {
   max-width: 42ch;
   margin-bottom: 24px;
 }
@@ -385,6 +385,15 @@ p {
 
 .install-path-card-erase .install-path-impact {
   color: var(--danger);
+}
+
+.install-path-requirement,
+.section-intro .update-requirement {
+  max-width: 52ch;
+  margin: 16px 0 0;
+  color: var(--ink-muted);
+  font-size: 0.82rem;
+  line-height: 1.55;
 }
 
 .install-path-card .button {
