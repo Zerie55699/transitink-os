@@ -6,6 +6,7 @@
 #include "AppConfig.h"
 #include "BatteryMonitor.h"
 #include "ConfigStore.h"
+#include "FirmwareUpdateService.h"
 #include "WidgetCatalogService.h"
 
 class ConfigPortal {
@@ -30,6 +31,8 @@ private:
     void scanWifiNetworks();
     void connectWifiForSetup();
     void sendSetupWifiStatus();
+    void checkFirmwareUpdate();
+    void installFirmwareUpdate();
     void listBusRoutes();
     void listBusDirections();
     void listBusStops();
@@ -54,6 +57,7 @@ private:
     ConfigStore& store_;
     WidgetCatalogService& catalog_;
     BatteryMonitor batteryMonitor_;
+    transitink::FirmwareUpdateService firmwareUpdate_;
     WebServer server_;
     DNSServer dns_;
     bool apMode_ = false;

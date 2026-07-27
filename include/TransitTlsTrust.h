@@ -118,4 +118,8 @@ inline void configureOpenMeteoVerifiedTls(WiFiClientSecure& client) {
     client.setCACert(kIsrgRootX1);
 }
 
+inline void configureFirmwareUpdateVerifiedTls(WiFiClientSecure& client) {
+    client.setCACert(kIsrgRootX1);
+}
+
 }  // namespace transitink

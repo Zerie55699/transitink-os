@@ -33,13 +33,30 @@ def installer_manifest(version: str, firmware_name: str) -> dict[str, object]:
     return {
         "name": "TransitInk OS Installer",
         "version": version,
-        "new_install_prompt_erase": True,
+        # This installer writes a merged factory image at offset 0. It is only
+        # safe to present it as a full install, so erasing is mandatory and is
+        # enforced by installer/esp-web-tools/full-erase-policy.js.
+        "new_install_prompt_erase": False,
         "builds": [
             {
                 "chipFamily": "ESP32-S3",
                 "parts": [{"path": f"firmware/{firmware_name}", "offset": 0}],
             }
         ],
+    }
+
+
+def ota_manifest(
+    version: str, firmware_name: str, size: int, digest: str
+) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "product": "transitink-os",
+        "board": "zectrix_note4",
+        "version": version,
+        "firmware": f"firmware/{firmware_name}",
+        "size": size,
+        "sha256": digest,
     }
 
 
@@ -166,12 +183,22 @@ def copy_legal_material(output_dir: Path) -> Path:
 
 
 def create_firmware_bundle(
-    output_dir: Path, firmware_path: Path, version: str, legal_dir: Path
+    output_dir: Path,
+    firmware_path: Path,
+    ota_firmware_path: Path,
+    version: str,
+    legal_dir: Path,
 ) -> Path:
     bundle_path = output_dir / f"transitink-zectrix-note4-v{version}.zip"
     with zipfile.ZipFile(bundle_path, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
         bundle.write(firmware_path, firmware_path.name)
-        for filename in ("manifest.json", "SHA256SUMS.txt", "release-metadata.json"):
+        bundle.write(ota_firmware_path, ota_firmware_path.name)
+        for filename in (
+            "manifest.json",
+            "ota-manifest.json",
+            "SHA256SUMS.txt",
+            "release-metadata.json",
+        ):
             source = require_file(output_dir / filename)
             bundle.write(source, source.name)
         for source in sorted(legal_dir.rglob("*")):
@@ -209,6 +236,9 @@ def package_installer(
     firmware_name = f"transitink-zectrix-note4-v{version}.bin"
     firmware_path = firmware_dir / firmware_name
     merge_firmware(build_dir, firmware_path)
+    ota_firmware_name = f"transitink-zectrix-note4-ota-v{version}.bin"
+    ota_firmware_path = firmware_dir / ota_firmware_name
+    shutil.copy2(require_file(build_dir / "firmware.bin"), ota_firmware_path)
 
     manifest = installer_manifest(version, firmware_name)
     (output_dir / "manifest.json").write_text(
@@ -216,8 +246,24 @@ def package_installer(
         encoding="utf-8",
     )
     firmware_digest = sha256(firmware_path)
+    ota_firmware_digest = sha256(ota_firmware_path)
+    (output_dir / "ota-manifest.json").write_text(
+        json.dumps(
+            ota_manifest(
+                version,
+                ota_firmware_name,
+                ota_firmware_path.stat().st_size,
+                ota_firmware_digest,
+            ),
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     (output_dir / "SHA256SUMS.txt").write_text(
-        f"{firmware_digest}  {firmware_name}\n",
+        f"{firmware_digest}  {firmware_name}\n"
+        f"{ota_firmware_digest}  {ota_firmware_name}\n",
         encoding="utf-8",
     )
     (output_dir / "release-metadata.json").write_text(
@@ -230,6 +276,9 @@ def package_installer(
                 "bundle": f"transitink-zectrix-note4-v{version}.zip",
                 "size": firmware_path.stat().st_size,
                 "sha256": firmware_digest,
+                "ota_firmware": ota_firmware_name,
+                "ota_size": ota_firmware_path.stat().st_size,
+                "ota_sha256": ota_firmware_digest,
             },
             ensure_ascii=False,
             indent=2,
@@ -237,7 +286,9 @@ def package_installer(
         + "\n",
         encoding="utf-8",
     )
-    create_firmware_bundle(output_dir, firmware_path, version, legal_dir)
+    create_firmware_bundle(
+        output_dir, firmware_path, ota_firmware_path, version, legal_dir
+    )
     return firmware_path
 
 

@@ -37,7 +37,7 @@ async function loadVersion(manifestUrl) {
     }
     if (manifestUrl === activeManifest) {
       installAction.disabled = false;
-      installAction.textContent = "連接裝置並安裝";
+      installAction.textContent = "連接裝置並完整安裝";
       showReleaseState("ready", manifest.version);
     }
   } catch {

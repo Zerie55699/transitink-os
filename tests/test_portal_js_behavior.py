@@ -369,6 +369,18 @@ global.fetch=(path,options)=>{
         self.assertNotIn("更新此路線", source)
         self.assertNotIn("catalog_update_button", widget_renderer)
 
+    def test_firmware_update_is_separate_and_preserves_settings(self):
+        source = (ROOT / "src/TransitInkPortalPage.cpp").read_text()
+        power_panel = source.split('id="panel_power"', 1)[1].split(
+            "</section>", 1
+        )[0]
+        self.assertIn("更新並保留設定", power_panel)
+        self.assertIn("Wi-Fi、小工具及路線設定", power_panel)
+        self.assertIn('onclick="checkFirmwareUpdate()"', power_panel)
+        self.assertIn('onclick="installFirmwareUpdate()"', power_panel)
+        self.assertIn("'/api/firmware/update'", source)
+        self.assertIn("[csrfHeader]:csrfToken", source)
+
     def test_global_catalog_update_refreshes_index_then_configured_stops(self):
         source = (ROOT / "src/TransitInkPortalPage.cpp").read_text()
         script = source.split("<script>", 1)[1].split("</script>", 1)[0]

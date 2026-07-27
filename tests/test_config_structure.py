@@ -182,6 +182,9 @@ class ThinConfigPortalStructureTests(unittest.TestCase):
         self.assertIn('server_.on("/api/wifi"', source)
         self.assertEqual(source.count('server_.on("/api/wifi/connect"'), 1)
         self.assertEqual(source.count('server_.on("/api/wifi/status"'), 1)
+        self.assertEqual(source.count('server_.on("/api/firmware/update"'), 2)
+        self.assertIn("firmwareUpdate_.check", source)
+        self.assertIn("firmwareUpdate_.install", source)
         for asset in (
             "index", "stops-kmb", "stops-ctb", "stops-gmb",
             "stops-tfl", "rail",

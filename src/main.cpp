@@ -15,6 +15,7 @@
 #include "ConfigStore.h"
 #include "CitybusClient.h"
 #include "EInkDisplay.h"
+#include "FirmwareUpdateService.h"
 #include "GmbClient.h"
 #include "JourneyTimeClient.h"
 #include "KmbClient.h"
@@ -845,6 +846,9 @@ void setup() {
             transitink::firstEnabledWidgetPage(deviceConfig.widgets));
     }
     widgetScheduler.setActivePage(activeWidgetPage, millis());
+    if (!transitink::FirmwareUpdateService::confirmRunningFirmware()) {
+        Serial.println("OTA firmware validation failed");
+    }
 
     if (deviceConfig.sleepEnabled && sleepMaintenanceWake) {
         if (deviceConfig.scheduledWakeEnabled) {

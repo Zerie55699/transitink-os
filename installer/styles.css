@@ -314,12 +314,82 @@ p {
 }
 
 .installer-section,
+.install-paths,
 .operation-section,
 .setup-section,
 .controls-section,
 .widgets-section {
   border-top: 1px solid var(--line);
   padding-block: clamp(78px, 10vw, 126px);
+}
+
+.install-paths {
+  border-top: 1px solid var(--line);
+}
+
+.install-path-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+}
+
+.install-path-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: 1fr auto;
+  gap: 22px 24px;
+  min-height: 370px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-strong);
+  padding: clamp(26px, 4vw, 40px);
+  box-shadow: var(--shadow-panel);
+}
+
+.install-path-card-update {
+  border-color: #b7cae7;
+  background: var(--surface-tint);
+}
+
+.install-path-index {
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 780;
+  letter-spacing: 0.1em;
+}
+
+.install-path-copy h3 {
+  margin-bottom: 14px;
+  font-size: clamp(1.55rem, 2.8vw, 2.15rem);
+  line-height: 1.15;
+  letter-spacing: -0.035em;
+}
+
+.install-path-context {
+  margin-bottom: 9px;
+  color: var(--ink-muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.install-path-copy > p:last-of-type {
+  max-width: 42ch;
+  margin-bottom: 24px;
+}
+
+.install-path-impact {
+  display: block;
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+
+.install-path-card-erase .install-path-impact {
+  color: var(--danger);
+}
+
+.install-path-card .button {
+  grid-column: 2;
+  justify-self: start;
 }
 
 .section-intro {
@@ -863,6 +933,7 @@ code {
   }
 
   .hero,
+  .install-path-grid,
   .installer-layout,
   .setup-section,
   .controls-layout,
@@ -962,11 +1033,24 @@ code {
   }
 
   .installer-section,
+  .install-paths,
   .operation-section,
   .setup-section,
   .controls-section,
   .widgets-section {
     padding-block: 70px;
+  }
+
+  .install-path-card {
+    grid-template-columns: 1fr;
+    min-height: auto;
+    border-radius: var(--radius-control);
+    padding: 26px 22px;
+  }
+
+  .install-path-card .button {
+    grid-column: 1;
+    justify-self: stretch;
   }
 
   .selected-device {

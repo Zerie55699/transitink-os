@@ -17,12 +17,13 @@
     <link rel="icon" href="./assets/favicon.ico?v=ae530a96" sizes="64x64">
     <link rel="icon" href="./assets/favicon.svg?v=1b97eefe" type="image/svg+xml">
     <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png?v=4a73ee56">
-    <link rel="stylesheet" href="./styles.css?v=21483ca7">
+    <link rel="stylesheet" href="./styles.css?v=22c7e86e">
     <script type="module" src="./esp-web-tools/vendor/install-button.js"></script>
-    <script type="module" src="./app.js?v=1d0b77f0"></script>
+    <script type="module" src="./esp-web-tools/full-erase-policy.js?v=7e70905b"></script>
+    <script type="module" src="./app.js?v=eb9742cc"></script>
   </head>
   <body>
-    <a class="skip-link" href="#installer">跳到安裝工具</a>
+    <a class="skip-link" href="#install-paths">跳到安裝方式</a>
 
     <header class="site-header">
       <a class="brand" href="#top" aria-label="TransitInk OS 首頁">
@@ -35,7 +36,7 @@
         >
       </a>
       <nav class="site-nav" aria-label="頁面導覽">
-        <a href="#installer">安裝</a>
+        <a href="#install-paths">安裝</a>
         <a href="#setup">首次設定</a>
         <a href="#controls">按鍵操作</a>
         <a href="#features">功能介紹</a>
@@ -54,10 +55,10 @@
           <p class="eyebrow">原始碼公開的電子紙交通資訊系統</p>
           <h1 id="hero-title">將 TransitInk OS 安裝到你的裝置</h1>
           <p class="hero-summary">
-            透過瀏覽器更新韌體，安裝後即可設定三頁共十二個交通資訊小工具。
+            首次安裝可以清除裝置並完整寫入，已安裝的裝置則可更新韌體並保留原有設定。
           </p>
           <div class="hero-actions">
-            <a class="button button-primary" href="#installer">開始安裝</a>
+            <a class="button button-primary" href="#install-paths">選擇安裝方式</a>
             <a class="button button-secondary" href="#controls">查看按鍵操作</a>
           </div>
         </div>
@@ -82,10 +83,48 @@
         </figure>
       </section>
 
+      <section class="install-paths shell" id="install-paths" aria-labelledby="install-paths-title">
+        <div class="section-intro compact-intro">
+          <p class="eyebrow">兩種安裝路徑</p>
+          <h2 id="install-paths-title">選擇適合的安裝方式</h2>
+          <p>請按照裝置目前的狀態選擇。兩種方式對裝置設定的處理不同。</p>
+        </div>
+
+        <div class="install-path-grid">
+          <article class="install-path-card install-path-card-erase">
+            <span class="install-path-index" aria-hidden="true">01</span>
+            <div class="install-path-copy">
+              <p class="install-path-context">新裝置或需要重新安裝</p>
+              <h3>首次安裝／清除安裝</h3>
+              <p>
+                由瀏覽器完整寫入 TransitInk OS。此方式會清除現有韌體、Wi-Fi、
+                小工具及路線設定。
+              </p>
+              <strong class="install-path-impact">會清除裝置設定</strong>
+            </div>
+            <a class="button button-secondary" href="#installer">進行完整安裝</a>
+          </article>
+
+          <article class="install-path-card install-path-card-update">
+            <span class="install-path-index" aria-hidden="true">02</span>
+            <div class="install-path-copy">
+              <p class="install-path-context">已安裝 TransitInk OS</p>
+              <h3>更新韌體並保留設定</h3>
+              <p>
+                由裝置本機設定頁下載及安裝新版本，保留 Wi-Fi、小工具及路線設定。
+              </p>
+              <strong class="install-path-impact">保留裝置設定</strong>
+            </div>
+            <a class="button button-primary" href="#firmware-update">查看更新步驟</a>
+          </article>
+        </div>
+      </section>
+
       <section class="installer-section shell" id="installer" aria-labelledby="installer-title">
         <div class="section-intro">
-          <h2 id="installer-title">選擇裝置並安裝</h2>
-          <p>先確認型號，再使用桌面 Chrome 或 Edge 開始安裝。</p>
+          <p class="eyebrow">首次安裝／清除安裝</p>
+          <h2 id="installer-title">完整安裝 TransitInk OS</h2>
+          <p>此工具適用於首次安裝或重新安裝，並會清除裝置內的現有設定。</p>
         </div>
 
         <div class="installer-layout">
@@ -113,12 +152,13 @@
                 <h3 id="risk-notice-title">刷機風險與備份責任</h3>
               </div>
               <p>
-                刷寫韌體會改寫裝置內容。斷電、拔除線材、選錯型號或使用不相容韌體，
-                可能導致設定遺失或裝置無法啟動。
+                本頁每次安裝都會先清除裝置資料，包括原有韌體、Wi-Fi、小工具及路線設定。
+                本頁不提供保留設定的韌體更新。
               </p>
               <p>
-                安裝工具不會自動備份原有韌體、Wi-Fi 資料或小工具設定。如需保留，
-                請在開始前自行備份或記錄，並自行準備所需的復原方法。
+                斷電、拔除線材、選錯型號或使用不相容韌體，可能導致裝置無法啟動。
+                安裝工具不會自動備份任何資料，請在開始前自行備份或記錄所需設定，
+                並自行準備復原方法。
               </p>
               <p class="risk-responsibility">
                 本工具按現狀提供。在法律允許的範圍內，刷機、資料遺失及裝置復原的風險與責任由使用者承擔。
@@ -127,7 +167,7 @@
 
             <esp-web-install-button id="install-button" manifest="./manifest.json">
               <button class="install-action" slot="activate" type="button">
-                連接裝置並安裝
+                連接裝置並完整安裝
               </button>
               <p class="inline-message error-message" slot="unsupported">
                 此瀏覽器不支援 Web Serial，請改用桌面 Chrome 或 Edge。
@@ -153,9 +193,44 @@
               <li>使用可傳輸資料的 USB 線，而非只供充電的線材。</li>
               <li>關閉其他正在使用序列連接埠的程式。</li>
               <li>確認裝置型號與上方選擇完全相同。</li>
+              <li>已備份或記錄 Wi-Fi、小工具及路線設定。</li>
             </ul>
           </aside>
         </div>
+      </section>
+
+      <section class="operation-section shell" id="firmware-update" aria-labelledby="firmware-update-title">
+        <div class="section-intro compact-intro">
+          <p class="eyebrow">已安裝 TransitInk OS</p>
+          <h2 id="firmware-update-title">更新韌體並保留設定</h2>
+          <p>
+            更新不在本頁刷寫。請由裝置本機設定頁下載及安裝，
+            Wi-Fi、小工具及路線設定會保留。
+          </p>
+        </div>
+        <ol class="procedure">
+          <li>
+            <span class="procedure-index" aria-hidden="true">1</span>
+            <div>
+              <h3>接上電源</h3>
+              <p>保持裝置連接 Wi-Fi，並在更新完成前不要關閉電源。</p>
+            </div>
+          </li>
+          <li>
+            <span class="procedure-index" aria-hidden="true">2</span>
+            <div>
+              <h3>開啟裝置設定頁</h3>
+              <p>按 Volume Up，在裝置畫面顯示的本機網址或 QR code 開啟設定頁。</p>
+            </div>
+          </li>
+          <li>
+            <span class="procedure-index" aria-hidden="true">3</span>
+            <div>
+              <h3>檢查並安裝</h3>
+              <p>在「設定」選擇「檢查韌體更新」，再按「更新並保留設定」。</p>
+            </div>
+          </li>
+        </ol>
       </section>
 
       <section class="operation-section shell" id="install-steps" aria-labelledby="operation-title">
@@ -175,7 +250,7 @@
             <span class="procedure-index" aria-hidden="true">2</span>
             <div>
               <h3>授權連接埠</h3>
-              <p>按「連接裝置並安裝」，在瀏覽器視窗選擇新增的 USB 連接埠。</p>
+              <p>按「連接裝置並完整安裝」，在瀏覽器視窗選擇新增的 USB 連接埠。</p>
             </div>
           </li>
           <li>

@@ -2,6 +2,17 @@
 
 All notable user-visible changes to TransitInk OS will be documented here.
 
+## 1.1.1 - 2026-07-27
+
+- Added an on-device firmware update path that downloads a verified release
+  image, installs it to the inactive application partition, and preserves
+  Wi-Fi, widgets, routes, and other saved settings.
+- Added release packaging for both complete browser installation images and
+  settings-preserving OTA images.
+- Separated the public installer into clear full-install and
+  settings-preserving update paths, with the data impact shown before users
+  choose a method.
+
 ## 1.1.0 - 2026-07-26
 
 - Expanded the dashboard from four widgets to three pages of four widgets;

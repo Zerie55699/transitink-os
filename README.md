@@ -64,6 +64,15 @@ scripts/restore_flash.sh backups/<backup>.bin "$ESP32_PORT"
 Flashing or restoring firmware can make a device temporarily unusable. Confirm
 the board, flash size, and serial port before running either operation.
 
+Existing TransitInk OS installations can update without erasing settings from
+the on-device settings portal. Under "設定" / "Settings", choose "檢查韌體更新"
+/ "Check for firmware update", then "更新並保留設定" / "Update and keep
+settings". The device downloads the board-specific application image over
+verified HTTPS, checks its declared size and SHA-256 digest, and writes only the
+inactive OTA application slot. NVS Wi-Fi and widget settings and LittleFS route
+overrides are not rewritten. Keep the device powered and connected until it
+restarts.
+
 ## First boot
 
 When no valid settings exist, the device starts a WPA2-protected
@@ -166,8 +175,9 @@ Do not assume the Zectrix pinout or flash layout is safe for another board.
 ## Web installer and releases
 
 The browser installer is maintained in [`installer/`](installer/) so its source,
-firmware version, merged image and manifest are released together. Build a local
-installer package after the firmware build with:
+firmware version, merged first-install image, OTA application image and
+manifests are released together. Build a local installer package after the
+firmware build with:
 
 ```bash
 PLATFORMIO_CORE_DIR="$PWD/.platformio" \
@@ -176,8 +186,9 @@ PLATFORMIO_CORE_DIR="$PWD/.platformio" \
 
 Generated Pages content is written to `dist/installer/` and is not committed.
 Pushing a `vX.Y.Z` tag whose version matches `FIRMWARE_VERSION` publishes the
-merged image, checksum, legal notices and a downloadable firmware bundle as
-GitHub Release assets, then deploys the same package through GitHub Pages. The
+merged image, settings-preserving OTA image, checksums, legal notices and a
+downloadable firmware bundle as GitHub Release assets, then deploys the same
+package through GitHub Pages. The
 canonical installer is
 [https://zerie55699.github.io/transitink-os/](https://zerie55699.github.io/transitink-os/).
 

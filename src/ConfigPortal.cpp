@@ -126,6 +126,10 @@ void ConfigPortal::registerRoutes() {
                [this]() { if (authorizePortalRequest(true)) connectWifiForSetup(); });
     server_.on("/api/wifi/status", HTTP_GET,
                [this]() { if (authorizePortalRequest(false)) sendSetupWifiStatus(); });
+    server_.on("/api/firmware/update", HTTP_GET,
+               [this]() { if (authorizePortalRequest(false)) checkFirmwareUpdate(); });
+    server_.on("/api/firmware/update", HTTP_POST,
+               [this]() { if (authorizePortalRequest(true)) installFirmwareUpdate(); });
     server_.on("/api/catalog/bus/routes", HTTP_GET,
                [this]() { if (authorizePortalRequest(false)) listBusRoutes(); });
     server_.on("/api/catalog/bus/directions", HTTP_GET,
@@ -272,6 +276,61 @@ void ConfigPortal::sendConfig() {
         return;
     }
     sendText(200, "application/json; charset=utf-8", json);
+}
+
+void ConfigPortal::checkFirmwareUpdate() {
+    transitink::FirmwareUpdateManifest manifest;
+    String error;
+    if (!firmwareUpdate_.check(manifest, error)) {
+        sendText(502, "text/plain; charset=utf-8", error);
+        return;
+    }
+    StaticJsonDocument<384> response;
+    response["current_version"] = FIRMWARE_VERSION;
+    response["latest_version"] = manifest.version;
+    response["update_available"] = manifest.updateAvailable;
+    response["size"] = manifest.size;
+    String json;
+    serializeJson(response, json);
+    server_.sendHeader("Cache-Control", "no-store");
+    sendText(200, "application/json; charset=utf-8", json);
+}
+
+void ConfigPortal::installFirmwareUpdate() {
+    if (!transitink::isPortalSaveAuthorized(
+            server_.header("Content-Type").c_str(),
+            server_.header("X-TransitInk-CSRF").c_str(),
+            csrfToken_.c_str())) {
+        sendText(403, "text/plain; charset=utf-8", "韌體更新要求驗證失敗");
+        return;
+    }
+    StaticJsonDocument<128> request;
+    if (server_.arg("plain").length() > 128) {
+        sendText(400, "text/plain; charset=utf-8", "韌體更新要求格式不正確");
+        return;
+    }
+    const DeserializationError parseError =
+        deserializeJson(request, server_.arg("plain"));
+    if (parseError || !request["version"].is<const char*>()) {
+        sendText(400, "text/plain; charset=utf-8", "韌體更新要求格式不正確");
+        return;
+    }
+    transitink::FirmwareUpdateManifest manifest;
+    String error;
+    if (!firmwareUpdate_.install(request["version"].as<const char*>(),
+                                 manifest, error)) {
+        sendText(502, "text/plain; charset=utf-8", error);
+        return;
+    }
+    StaticJsonDocument<128> response;
+    response["installed"] = true;
+    response["version"] = manifest.version;
+    String json;
+    serializeJson(response, json);
+    server_.sendHeader("Cache-Control", "no-store");
+    sendText(200, "application/json; charset=utf-8", json);
+    delay(600);
+    ESP.restart();
 }
 
 void ConfigPortal::saveConfig() {

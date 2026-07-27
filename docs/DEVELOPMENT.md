@@ -127,8 +127,10 @@ PLATFORMIO_CORE_DIR="$PWD/.platformio" \
   .venv/bin/python scripts/package_installer.py
 ```
 
-The output under `dist/installer/` includes the versioned merged image,
-`manifest.json`, `SHA256SUMS.txt`, and machine-readable release metadata. It is
+The output under `dist/installer/` includes the versioned merged first-install
+image, the raw application image used for settings-preserving A/B OTA,
+`manifest.json`, `ota-manifest.json`, `SHA256SUMS.txt`, and machine-readable
+release metadata. It is
 ignored because releases are reproducibly generated from source. Do not copy
 the nested `.git` directory from the ignored legacy installer clone.
 

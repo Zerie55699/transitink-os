@@ -20,3 +20,8 @@ share the listed licence.
 All retained texts are copied into `legal/licenses/` by the release packager.
 Upstream repositories and package metadata remain available through
 <https://github.com/esphome/esp-web-tools> and the npm registry.
+
+TransitInk loads `full-erase-policy.js` alongside the vendored installer. This
+local policy forces the upstream install dialog to use its full-erase path
+because TransitInk's browser installer writes a merged factory image at offset
+zero. The upstream licence and retained notices remain unchanged.

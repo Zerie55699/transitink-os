@@ -11,12 +11,13 @@ import shutil
 import sys
 import zipfile
 from pathlib import Path, PurePosixPath
+from typing import Optional
 
 
 ROOT = Path(__file__).resolve().parents[1]
 INSTALLER_SOURCE = ROOT / "installer"
 VERSION_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
-SHA256_PATTERN = re.compile(r"^([0-9a-f]{64})  ([^\n/]+)\n?$")
+SHA256_LINE_PATTERN = re.compile(r"^([0-9a-f]{64})  ([^/]+)$")
 
 
 def sha256(path: Path) -> str:
@@ -59,7 +60,7 @@ def require_directory(path: Path) -> Path:
     return path
 
 
-def validate_release(output_dir: Path, bundle: Path) -> str:
+def validate_release(output_dir: Path, bundle: Path) -> tuple[str, Optional[str]]:
     metadata = json.loads(
         require_file(output_dir / "release-metadata.json").read_text(encoding="utf-8")
     )
@@ -70,13 +71,28 @@ def validate_release(output_dir: Path, bundle: Path) -> str:
     firmware_name = metadata.get("firmware")
     bundle_name = metadata.get("bundle")
     expected_digest = metadata.get("sha256")
+    ota_fields = (
+        metadata.get("ota_firmware"),
+        metadata.get("ota_size"),
+        metadata.get("ota_sha256"),
+    )
+    has_ota = all(value is not None for value in ota_fields)
+    if any(value is not None for value in ota_fields) and not has_ota:
+        raise ValueError("release bundle has incomplete OTA metadata")
+    ota_firmware_name = ota_fields[0] if has_ota else None
+    expected_ota_digest = ota_fields[2] if has_ota else None
 
     if not isinstance(version, str) or VERSION_PATTERN.fullmatch(version) is None:
         raise ValueError("release bundle has an invalid version")
     expected_firmware_name = f"transitink-zectrix-note4-v{version}.bin"
+    expected_ota_firmware_name = (
+        f"transitink-zectrix-note4-ota-v{version}.bin"
+    )
     expected_bundle_name = f"transitink-zectrix-note4-v{version}.zip"
     if firmware_name != expected_firmware_name:
         raise ValueError("release bundle firmware name does not match its version")
+    if has_ota and ota_firmware_name != expected_ota_firmware_name:
+        raise ValueError("release bundle OTA firmware name does not match its version")
     if bundle_name != expected_bundle_name or bundle.name != expected_bundle_name:
         raise ValueError("release bundle filename does not match its version")
     if manifest.get("version") != version:
@@ -95,15 +111,47 @@ def validate_release(output_dir: Path, bundle: Path) -> str:
     if actual_digest != expected_digest:
         raise ValueError("released firmware SHA-256 does not match its metadata")
 
-    checksum = require_file(output_dir / "SHA256SUMS.txt").read_text(encoding="utf-8")
-    checksum_match = SHA256_PATTERN.fullmatch(checksum)
-    if (
-        checksum_match is None
-        or checksum_match.group(1) != actual_digest
-        or checksum_match.group(2) != firmware_name
-    ):
-        raise ValueError("released firmware SHA256SUMS entry is invalid")
-    return firmware_name
+    actual_ota_digest = None
+    if has_ota:
+        assert isinstance(ota_firmware_name, str)
+        ota_firmware = require_file(output_dir / ota_firmware_name)
+        actual_ota_digest = sha256(ota_firmware)
+        if actual_ota_digest != expected_ota_digest:
+            raise ValueError("released OTA firmware SHA-256 does not match its metadata")
+        ota_manifest = json.loads(
+            require_file(output_dir / "ota-manifest.json").read_text(encoding="utf-8")
+        )
+        expected_ota_manifest = {
+            "schema_version": 1,
+            "product": "transitink-os",
+            "board": "zectrix_note4",
+            "version": version,
+            "firmware": f"firmware/{ota_firmware_name}",
+            "size": ota_firmware.stat().st_size,
+            "sha256": actual_ota_digest,
+        }
+        if ota_manifest != expected_ota_manifest:
+            raise ValueError("released OTA manifest does not match its firmware")
+    elif (output_dir / "ota-manifest.json").exists():
+        raise ValueError("legacy release bundle contains unexpected OTA manifest")
+
+    checksum_lines = require_file(output_dir / "SHA256SUMS.txt").read_text(
+        encoding="utf-8"
+    ).splitlines()
+    checksums: dict[str, str] = {}
+    for line in checksum_lines:
+        checksum_match = SHA256_LINE_PATTERN.fullmatch(line)
+        if checksum_match is None or checksum_match.group(2) in checksums:
+            raise ValueError("released firmware SHA256SUMS entry is invalid")
+        checksums[checksum_match.group(2)] = checksum_match.group(1)
+    expected_checksums = {firmware_name: actual_digest}
+    if has_ota:
+        assert isinstance(ota_firmware_name, str)
+        assert isinstance(actual_ota_digest, str)
+        expected_checksums[ota_firmware_name] = actual_ota_digest
+    if checksums != expected_checksums:
+        raise ValueError("released firmware SHA256SUMS entries are invalid")
+    return firmware_name, ota_firmware_name
 
 
 def overlay_installer_source(output_dir: Path) -> None:
@@ -129,10 +177,15 @@ def assemble_pages(bundle: Path, output_dir: Path) -> Path:
     output_dir.mkdir(parents=True)
 
     extract_release_bundle(bundle, output_dir)
-    firmware_name = validate_release(output_dir, bundle)
+    firmware_name, ota_firmware_name = validate_release(output_dir, bundle)
     firmware_dir = output_dir / "firmware"
     firmware_dir.mkdir()
     shutil.move(output_dir / firmware_name, firmware_dir / firmware_name)
+    if ota_firmware_name is not None:
+        shutil.move(
+            output_dir / ota_firmware_name,
+            firmware_dir / ota_firmware_name,
+        )
     shutil.copy2(bundle, output_dir / bundle.name)
     overlay_installer_source(output_dir)
     return output_dir

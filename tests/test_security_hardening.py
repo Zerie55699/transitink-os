@@ -21,6 +21,21 @@ class SecurityHardeningTests(unittest.TestCase):
         trust = read("include/TransitTlsTrust.h")
         self.assertIn("Hongkong Post Root CA 3", trust)
         self.assertIn("5A:2F:C0:3F", trust)
+        updater = read("src/FirmwareUpdateService.cpp")
+        self.assertIn("configureFirmwareUpdateVerifiedTls(tls)", updater)
+        self.assertIn("mbedtls_sha256_update", updater)
+        self.assertIn("digestHex(digest) != manifest.sha256", updater)
+        self.assertIn("esp_ota_get_next_update_partition", updater)
+        self.assertIn("Update.begin(manifest.size, U_FLASH)", updater)
+        self.assertNotIn("U_LITTLEFS", updater)
+        self.assertNotIn("setInsecure", updater)
+        setup = read("src/main.cpp").split("void setup()", 1)[1].split(
+            "void loop()", 1
+        )[0]
+        self.assertGreater(
+            setup.index("confirmRunningFirmware"),
+            setup.index("hasUsableConfig"),
+        )
 
     def test_release_platform_and_direct_libraries_are_exactly_pinned(self):
         config = read("platformio.ini")

@@ -181,9 +181,11 @@ licensing boundaries live under `scripts/`, `data/catalog/`,
 reads the single firmware version from `include/ProductConfig.h`, merges the
 Zectrix Note 4 bootloader, partition table, Arduino boot application and
 firmware at their verified offsets, then creates a relative ESP Web Tools
-manifest, SHA-256 checksum and release metadata under `dist/installer/`.
+manifest. It also publishes the raw application image and a board-scoped OTA
+manifest for settings-preserving updates. Both images have SHA-256 checksums and
+release metadata under `dist/installer/`.
 
 The release workflow rejects a tag that does not match `FIRMWARE_VERSION`. The
-same generated binary is uploaded to the GitHub Release and deployed through
-GitHub Pages, so the installer cannot silently point at a different firmware
-than the release asset.
+same generated first-install and OTA images are uploaded to the GitHub Release
+and deployed through GitHub Pages, so neither update path can silently point at
+different firmware from the release assets.

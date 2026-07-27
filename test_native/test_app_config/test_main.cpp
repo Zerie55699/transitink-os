@@ -1,6 +1,7 @@
 #include "ConfigStore.h"
 #include "PortalConfigCodec.h"
 #include "core/PortalRequestAuth.h"
+#include "core/FirmwareUpdateCore.h"
 
 #include <ArduinoJson.h>
 #include <unity.h>
@@ -580,6 +581,35 @@ void test_portal_ap_password_and_request_source_are_restricted() {
         "", "SESSIONTOKEN"));
 }
 
+void test_firmware_update_metadata_is_strictly_validated() {
+    int comparison = 0;
+    TEST_ASSERT_TRUE(transitink::isSemanticFirmwareVersion("1.2.3"));
+    TEST_ASSERT_FALSE(transitink::isSemanticFirmwareVersion("1.2"));
+    TEST_ASSERT_FALSE(transitink::isSemanticFirmwareVersion("v1.2.3"));
+    TEST_ASSERT_FALSE(transitink::isSemanticFirmwareVersion("1.2.3.4"));
+    TEST_ASSERT_TRUE(transitink::compareSemanticFirmwareVersions(
+        "1.2.4", "1.2.3", comparison));
+    TEST_ASSERT_EQUAL_INT(1, comparison);
+    TEST_ASSERT_TRUE(transitink::compareSemanticFirmwareVersions(
+        "1.2.3", "1.2.3", comparison));
+    TEST_ASSERT_EQUAL_INT(0, comparison);
+    TEST_ASSERT_FALSE(transitink::compareSemanticFirmwareVersions(
+        "invalid", "1.2.3", comparison));
+
+    TEST_ASSERT_TRUE(transitink::isSafeFirmwareAssetPath(
+        "firmware/transitink-zectrix-note4-ota-v1.2.3.bin"));
+    TEST_ASSERT_FALSE(transitink::isSafeFirmwareAssetPath(
+        "firmware/../secrets.bin"));
+    TEST_ASSERT_FALSE(transitink::isSafeFirmwareAssetPath(
+        "https://attacker.example/update.bin"));
+    TEST_ASSERT_FALSE(transitink::isSafeFirmwareAssetPath(
+        "firmware/update.bin?download=1"));
+
+    TEST_ASSERT_TRUE(transitink::isSha256Digest(std::string(64, 'a')));
+    TEST_ASSERT_FALSE(transitink::isSha256Digest(std::string(63, 'a')));
+    TEST_ASSERT_FALSE(transitink::isSha256Digest(std::string(64, 'A')));
+}
+
 }  // namespace
 
 void setUp() {}
@@ -605,5 +635,6 @@ int main(int, char**) {
     RUN_TEST(test_portal_successful_multi_page_save_survives_reboot_load);
     RUN_TEST(test_portal_save_auth_rejects_cross_site_and_invalid_tokens);
     RUN_TEST(test_portal_ap_password_and_request_source_are_restricted);
+    RUN_TEST(test_firmware_update_metadata_is_strictly_validated);
     return UNITY_END();
 }

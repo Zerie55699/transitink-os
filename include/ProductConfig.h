@@ -2,9 +2,16 @@
 
 #define FIRMWARE_PRODUCT_NAME "TransitInk OS"
 #define FIRMWARE_SHORT_NAME "TransitInk"
+#define FIRMWARE_PRODUCT_ID "transitink-os"
+#define FIRMWARE_BOARD_ID "zectrix_note4"
 #define DEVICE_NAME FIRMWARE_PRODUCT_NAME
-#define FIRMWARE_VERSION "1.1.0"
+#define FIRMWARE_VERSION "1.1.1"
 #define CONFIG_AP_PREFIX FIRMWARE_SHORT_NAME
+
+#ifndef TRANSITINK_FIRMWARE_UPDATE_BASE_URL
+#define TRANSITINK_FIRMWARE_UPDATE_BASE_URL \
+    "https://zerie55699.github.io/transitink-os"
+#endif
 
 #define ETA_REFRESH_DEFAULT_SECONDS 45
 #define ETA_MAX_ROUTES 4
