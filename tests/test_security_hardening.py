@@ -44,6 +44,19 @@ class SecurityHardeningTests(unittest.TestCase):
         self.assertIn("attest-build-provenance@", release)
         self.assertIn("permissions: {}", release)
 
+    def test_codeql_keeps_platformio_dependencies_outside_the_source_root(self):
+        codeql = read(".github/workflows/codeql.yml")
+        self.assertIn(
+            "PLATFORMIO_CORE_DIR: ${{ runner.temp }}/platformio",
+            codeql,
+        )
+        self.assertIn(
+            "PLATFORMIO_WORKSPACE_DIR: ${{ runner.temp }}/transitink-pio",
+            codeql,
+        )
+        self.assertIn("build-mode: manual", codeql)
+        self.assertNotIn('PLATFORMIO_CORE_DIR="$PWD/.platformio"', codeql)
+
     def test_ci_scans_complete_history_with_checksum_verified_gitleaks(self):
         ci = read(".github/workflows/ci.yml")
         self.assertNotIn("gitleaks/gitleaks-action", ci)
