@@ -1,0 +1,66 @@
+name: Deploy installer website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "installer/**"
+      - "scripts/assemble_installer_pages.py"
+      - ".github/workflows/installer-pages.yml"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: installer-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+      pages: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Check out current installer source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download latest released firmware bundle
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release_tag="$(gh release view --json tagName --jq .tagName)"
+          mkdir -p dist/release
+          gh release download "$release_tag" \
+            --pattern "transitink-zectrix-note4-v*.zip" \
+            --dir dist/release
+          bundles=(dist/release/*.zip)
+          if [[ "${#bundles[@]}" -ne 1 ]]; then
+            printf 'Expected one released firmware bundle, found %s\n' "${#bundles[@]}" >&2
+            exit 1
+          fi
+          printf 'RELEASE_BUNDLE=%s\n' "${bundles[0]}" >> "$GITHUB_ENV"
+
+      - name: Assemble installer website
+        run: |
+          python3 scripts/assemble_installer_pages.py \
+            --release-bundle "$RELEASE_BUNDLE"
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - name: Upload installer website
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: dist/installer
+
+      - name: Deploy installer website
+        id: deployment
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0

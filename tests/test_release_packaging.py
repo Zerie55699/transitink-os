@@ -1,4 +1,5 @@
 import importlib.util
+import hashlib
 import json
 import tempfile
 import unittest
@@ -14,6 +15,13 @@ SPEC = importlib.util.spec_from_file_location(
 PACKAGE_INSTALLER = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(PACKAGE_INSTALLER)
+
+PAGES_SPEC = importlib.util.spec_from_file_location(
+    "assemble_installer_pages", ROOT / "scripts" / "assemble_installer_pages.py"
+)
+ASSEMBLE_INSTALLER_PAGES = importlib.util.module_from_spec(PAGES_SPEC)
+assert PAGES_SPEC.loader is not None
+PAGES_SPEC.loader.exec_module(ASSEMBLE_INSTALLER_PAGES)
 
 
 class ReleasePackagingTests(unittest.TestCase):
@@ -270,6 +278,69 @@ class ReleasePackagingTests(unittest.TestCase):
         self.assertIn("actions/deploy-pages@cd2ce8fc", workflow)
         self.assertNotIn("uses: actions/checkout@v", workflow)
         self.assertNotIn("zectrix-note4-installer.git", workflow)
+
+    def test_installer_pages_use_latest_release_firmware(self):
+        workflow = (
+            ROOT / ".github" / "workflows" / "installer-pages.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("branches: [main]", workflow)
+        self.assertIn('- "installer/**"', workflow)
+        self.assertIn("gh release download", workflow)
+        self.assertIn("scripts/assemble_installer_pages.py", workflow)
+        self.assertIn("actions/upload-pages-artifact@fc324d35", workflow)
+        self.assertIn("actions/deploy-pages@cd2ce8fc", workflow)
+        self.assertNotIn("platformio run", workflow)
+        self.assertNotIn("scripts/package_installer.py", workflow)
+
+    def test_pages_assembler_overlays_ui_without_rebuilding_firmware(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            version = "1.1.0"
+            firmware_name = f"transitink-zectrix-note4-v{version}.bin"
+            bundle_name = f"transitink-zectrix-note4-v{version}.zip"
+            firmware = b"released firmware"
+            digest = hashlib.sha256(firmware).hexdigest()
+            bundle = root / bundle_name
+            manifest = PACKAGE_INSTALLER.installer_manifest(version, firmware_name)
+            metadata = {
+                "version": version,
+                "board": "zectrix_note4",
+                "chip_family": "ESP32-S3",
+                "firmware": firmware_name,
+                "bundle": bundle_name,
+                "size": len(firmware),
+                "sha256": digest,
+            }
+            with zipfile.ZipFile(bundle, "w") as archive:
+                archive.writestr(firmware_name, firmware)
+                archive.writestr(
+                    "manifest.json",
+                    json.dumps(manifest),
+                )
+                archive.writestr(
+                    "release-metadata.json",
+                    json.dumps(metadata),
+                )
+                archive.writestr(
+                    "SHA256SUMS.txt",
+                    f"{digest}  {firmware_name}\n",
+                )
+                archive.writestr("legal/PRODUCT_IMAGE_SOURCE.md", "old")
+
+            output = root / "site"
+            ASSEMBLE_INSTALLER_PAGES.assemble_pages(bundle, output)
+
+            self.assertEqual(firmware, (output / "firmware" / firmware_name).read_bytes())
+            self.assertFalse((output / firmware_name).exists())
+            self.assertTrue((output / bundle_name).is_file())
+            self.assertEqual(
+                (ROOT / "installer" / "index.html").read_bytes(),
+                (output / "index.html").read_bytes(),
+            )
+            self.assertEqual(
+                (ROOT / "installer" / "assets" / "SOURCE.md").read_bytes(),
+                (output / "legal" / "PRODUCT_IMAGE_SOURCE.md").read_bytes(),
+            )
 
 
 if __name__ == "__main__":
