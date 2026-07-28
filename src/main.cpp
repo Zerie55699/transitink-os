@@ -17,6 +17,7 @@
 #include "EInkDisplay.h"
 #include "FirmwareUpdateService.h"
 #include "GmbClient.h"
+#include "HkGlyphFont.h"
 #include "JourneyTimeClient.h"
 #include "KmbClient.h"
 #include "LightRailClient.h"
@@ -821,6 +822,10 @@ void setup() {
     bool loaded = configStore.load(deviceConfig);
     if (loaded && transitink::isUiLocaleSupported(deviceConfig.uiLocale)) {
         transitink::setUiLocale(deviceConfig.uiLocale);
+    }
+    if (loaded &&
+        transitink::isDisplayFontSupported(deviceConfig.displayFont)) {
+        setActiveDisplayFont(deviceConfig.displayFont);
     }
     if (loaded &&
         transitink::isDeviceTimeZoneSupported(deviceConfig.timeZone)) {

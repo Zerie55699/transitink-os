@@ -124,6 +124,7 @@ global.document={
 element('wifi_ssid').value='TransitInk';
 element('weather_location').value='uk:london';
 element('time_zone').value='Europe/London';
+element('display_font').value='unifont';
 widgetDrafts=Array.from({length:widgetSlotCount},()=>emptyWidget());
 widgetDrafts[0].type='bus_eta';
 expandedSlot=0;
@@ -137,7 +138,7 @@ if(element('weather_region').value!=='uk'||element('weather_location').value!=='
 setWeatherRegion('hk');
 if(element('weather_region').value!=='hk'||element('weather_location').value!=='香港天文台'||element('weather_location').innerHTML.includes('London')||!element('uk_weather_attribution').hidden)throw new Error('Hong Kong weather locations were not isolated');
 setWeatherRegion('uk');
-if(collectConfig().ui_locale!=='en-GB'||collectConfig().weather_location_tc!=='uk:london'||collectConfig().time_zone!=='Europe/London')throw new Error('English locale, UK weather, or time zone was not included in the saved config');
+if(collectConfig().ui_locale!=='en-GB'||collectConfig().display_font!=='unifont'||collectConfig().weather_location_tc!=='uk:london'||collectConfig().time_zone!=='Europe/London')throw new Error('English locale, display font, UK weather, or time zone was not included in the saved config');
 setPortalLocale('zh-HK');
 if(!element('widget_cards').innerHTML.includes('小工具類型')||collectConfig().ui_locale!=='zh-HK')throw new Error('Traditional Chinese locale was not restored');
 process.stdout.write('ok');
@@ -546,7 +547,7 @@ global.fetch=(path,options)=>{
         harness = r"""
 const elements={};
 function element(id){return elements[id]||(elements[id]={id,value:'',checked:false,hidden:false,innerHTML:'',textContent:'',disabled:false,selectedOptions:[],setAttribute(name,value){this[name]=value},insertAdjacentHTML(){},focus(){}})}
-const editableControls=[element('wifi_ssid'),element('ui_locale'),element('catalog_update_button'),element('submit')];
+const editableControls=[element('wifi_ssid'),element('ui_locale'),element('display_font'),element('catalog_update_button'),element('submit')];
 global.document={
   getElementById:element,
   querySelector(){return element('submit')},

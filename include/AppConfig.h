@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include "ProductConfig.h"
+#include "core/DisplayFontCore.h"
 #include "core/TimeZoneCore.h"
 #include "core/UiText.h"
 #include "core/WidgetConfigCore.h"
@@ -22,6 +23,7 @@ constexpr std::size_t kMaxCommonConfigTextBytes = 96;
 struct DeviceConfig {
     uint16_t schemaVersion = transitink::kConfigSchemaVersion;
     transitink::UiLocale uiLocale = transitink::UiLocale::ZhHk;
+    transitink::DisplayFont displayFont = transitink::DisplayFont::NotoSans;
     String wifiSsid;
     String wifiPassword;
     String weatherLocationTc = "香港天文台";

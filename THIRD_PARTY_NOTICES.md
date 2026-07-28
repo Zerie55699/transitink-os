@@ -17,6 +17,17 @@ The generated 16-pixel bitmap glyph table in
 `src/generated/HkGlyphFontData.cpp` is derived from that font and is distributed
 under the same OFL-1.1 terms.
 
+## GNU Unifont
+
+TransitInk OS vendors the GNU Unifont 17.0.04 compiled BDF under
+`third_party/fonts/unifont/`. Its source URL, upstream copyright statement and
+SHA-256 digest are recorded in `SOURCE.md`, and the complete SIL Open Font
+License Version 1.1 is retained in `OFL-1.1.txt`.
+
+The selectable pixel-font table in
+`src/generated/UnifontGlyphFontData.cpp` contains an un-antialiased subset of
+the original 8×16 and 16×16 bitmap glyphs and remains under OFL-1.1.
+
 ## yxml
 
 The vendored yxml source under `lib/yxml/` retains its upstream copyright,

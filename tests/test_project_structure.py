@@ -114,7 +114,7 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertIn('#define FIRMWARE_PRODUCT_NAME "TransitInk OS"', config)
         self.assertIn('#define FIRMWARE_SHORT_NAME "TransitInk"', config)
         self.assertIn("#define CONFIG_AP_PREFIX FIRMWARE_SHORT_NAME", config)
-        self.assertIn('#define FIRMWARE_VERSION "1.1.2"', config)
+        self.assertIn('#define FIRMWARE_VERSION "1.1.3"', config)
         self.assertNotIn("Bus ETA Note 4", config + readme)
         self.assertNotIn("巴士 ETA", config + readme)
         self.assertTrue(readme.startswith("# TransitInk OS"))
@@ -425,7 +425,7 @@ class ProjectStructureTests(unittest.TestCase):
 
         config = read_text("include/ProductConfig.h")
         profile_test = read_text("test_host/test_board_profile.cpp")
-        self.assertIn('#define FIRMWARE_VERSION "1.1.2"', config)
+        self.assertIn('#define FIRMWARE_VERSION "1.1.3"', config)
         self.assertIn("battery.adcPin == 4", profile_test)
         self.assertIn("battery.sensePowerPin == 17", profile_test)
         self.assertIn("battery.chargeDetectPin == 2", profile_test)
@@ -701,9 +701,13 @@ class ProjectStructureTests(unittest.TestCase):
 
         glyph_lookup = read_text("src/HkGlyphFont.cpp")
         glyphs = read_text("src/generated/HkGlyphFontData.cpp")
+        unifont_glyphs = read_text("src/generated/UnifontGlyphFontData.cpp")
         self.assertIn("0x9418", glyphs)
         self.assertIn("SPDX-License-Identifier: OFL-1.1", glyphs)
+        self.assertIn("0x9418", unifont_glyphs)
+        self.assertIn("SPDX-License-Identifier: OFL-1.1", unifont_glyphs)
         self.assertIn("findHkGlyph", glyph_lookup)
+        self.assertIn("kUnifontGlyphs", glyph_lookup)
         self.assertNotIn("kHkGlyphs[]", glyph_lookup)
 
     def test_transitink_portal_has_three_tabs_and_three_accessible_widget_pages(self):
@@ -717,7 +721,11 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertIn('value="zh-HK"', settings_panel)
         self.assertIn('value="en-GB"', settings_panel)
         self.assertIn('data-i18n="settings">設定</button>', page)
-        self.assertIn("interface_language:'Interface language'", page)
+        self.assertIn("interface_language:'Interface and display'", page)
+        self.assertIn('id="display_font"', settings_panel)
+        self.assertIn('value="noto_sans"', settings_panel)
+        self.assertIn('value="unifont"', settings_panel)
+        self.assertIn("display_font:byId('display_font').value", page)
         self.assertIn("label_tc:t('mtr')", page)
         self.assertNotIn("港鐵重鐵", page)
         self.assertIn('role="tablist"', page)
@@ -1305,6 +1313,9 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertIn('default=None', generator)
         self.assertIn("NotoSansCJKhk-Regular.otf", generator)
         self.assertIn("DEFAULT_FONT_SHA256", generator)
+        self.assertIn("unifont-17.0.04.bdf.gz", generator)
+        self.assertIn("DEFAULT_UNIFONT_SHA256", generator)
+        self.assertIn("render_bdf_chars", generator)
         self.assertIn('"--check"', generator)
         self.assertNotIn("/System/Library/Fonts", generator)
         self.assertNotIn("coretext", generator)
@@ -1345,6 +1356,31 @@ class ProjectStructureTests(unittest.TestCase):
         )
         self.assertIn(generator.DEFAULT_FONT_SHA256, source_path.read_text())
         self.assertIn("src/generated/HkGlyphFontData.cpp", notices_path.read_text())
+
+        unifont_path = ROOT / "third_party/fonts/unifont/unifont-17.0.04.bdf.gz"
+        unifont_licence_path = ROOT / "third_party/fonts/unifont/OFL-1.1.txt"
+        unifont_source_path = ROOT / "third_party/fonts/unifont/SOURCE.md"
+        unifont_generated_path = ROOT / "src/generated/UnifontGlyphFontData.cpp"
+        self.assertTrue(unifont_path.is_file())
+        self.assertTrue(unifont_licence_path.is_file())
+        self.assertTrue(unifont_source_path.is_file())
+        self.assertTrue(unifont_generated_path.is_file())
+        self.assertEqual(
+            hashlib.sha256(unifont_path.read_bytes()).hexdigest(),
+            generator.DEFAULT_UNIFONT_SHA256,
+        )
+        self.assertIn(
+            "SIL OPEN FONT LICENSE Version 1.1",
+            unifont_licence_path.read_text(),
+        )
+        self.assertIn(
+            generator.DEFAULT_UNIFONT_SHA256,
+            unifont_source_path.read_text(),
+        )
+        self.assertIn(
+            "src/generated/UnifontGlyphFontData.cpp",
+            notices_path.read_text(),
+        )
 
     def test_glyph_generator_rejects_non_bmp_codepoints(self):
         script = ROOT / "scripts" / "generate_hk_glyph_font.py"

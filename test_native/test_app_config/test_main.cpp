@@ -81,6 +81,7 @@ transitink::WidgetConfig validJourney() {
 DeviceConfig roundTripConfig() {
     DeviceConfig config;
     config.uiLocale = transitink::UiLocale::EnGb;
+    config.displayFont = transitink::DisplayFont::Unifont;
     config.timeZone = transitink::DeviceTimeZone::UnitedKingdom;
     config.wifiSsid = "TransitInk-Test";
     config.wifiPassword = "password";
@@ -153,6 +154,8 @@ void test_v2_four_slot_config_migrates_and_defaults_to_traditional_chinese() {
     TEST_ASSERT_TRUE(error.empty());
     TEST_ASSERT_EQUAL_INT(static_cast<int>(transitink::UiLocale::ZhHk),
                           static_cast<int>(parsed.uiLocale));
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(transitink::DisplayFont::NotoSans),
+                          static_cast<int>(parsed.displayFont));
     TEST_ASSERT_EQUAL_INT(
         static_cast<int>(transitink::DeviceTimeZone::HongKong),
         static_cast<int>(parsed.timeZone));
@@ -188,6 +191,10 @@ void test_has_usable_config_requires_valid_complete_schema() {
     TEST_ASSERT_FALSE(hasUsableConfig(config));
 
     config.uiLocale = transitink::UiLocale::ZhHk;
+    config.displayFont = static_cast<transitink::DisplayFont>(0xff);
+    TEST_ASSERT_FALSE(hasUsableConfig(config));
+
+    config.displayFont = transitink::DisplayFont::NotoSans;
     config.timeZone = static_cast<transitink::DeviceTimeZone>(0xff);
     TEST_ASSERT_FALSE(hasUsableConfig(config));
 
@@ -210,6 +217,7 @@ void test_v3_round_trip_uses_exact_active_payloads() {
     TEST_ASSERT_FALSE(deserializeJson(doc, json));
     TEST_ASSERT_EQUAL_UINT16(transitink::kConfigSchemaVersion, doc["schema_version"].as<uint16_t>());
     TEST_ASSERT_EQUAL_STRING("en-GB", doc["ui_locale"].as<const char*>());
+    TEST_ASSERT_EQUAL_STRING("unifont", doc["display_font"].as<const char*>());
     TEST_ASSERT_EQUAL_STRING("Europe/London",
                              doc["time_zone"].as<const char*>());
     TEST_ASSERT_EQUAL_STRING("uk:london",
@@ -256,6 +264,8 @@ void test_v3_round_trip_uses_exact_active_payloads() {
         parsed.widgets[3].gmb.stopLabelEn.c_str());
     TEST_ASSERT_EQUAL_INT(static_cast<int>(transitink::UiLocale::EnGb),
                           static_cast<int>(parsed.uiLocale));
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(transitink::DisplayFont::Unifont),
+                          static_cast<int>(parsed.displayFont));
     TEST_ASSERT_EQUAL_INT(
         static_cast<int>(transitink::DeviceTimeZone::UnitedKingdom),
         static_cast<int>(parsed.timeZone));
@@ -275,6 +285,22 @@ void test_invalid_time_zone_is_rejected_without_mutation() {
 
     DeviceConfig invalid = roundTripConfig();
     invalid.timeZone = static_cast<transitink::DeviceTimeZone>(0xff);
+    DeviceConfigSerializationMetrics metrics;
+    String json;
+    String error;
+    TEST_ASSERT_FALSE(
+        serializeDeviceConfigJsonChecked(invalid, json, metrics, error));
+    TEST_ASSERT_FALSE(error.empty());
+}
+
+void test_invalid_display_font_is_rejected_without_mutation() {
+    std::string invalidJson = v3Json(disabledWidgets(transitink::kWidgetSlotCount));
+    invalidJson.pop_back();
+    invalidJson += R"(,"display_font":"unknown"})";
+    assertParseFailurePreserves(invalidJson);
+
+    DeviceConfig invalid = roundTripConfig();
+    invalid.displayFont = static_cast<transitink::DisplayFont>(0xff);
     DeviceConfigSerializationMetrics metrics;
     String json;
     String error;
@@ -337,6 +363,8 @@ void test_legacy_decode_migrates_directly_to_widget_slots() {
     TEST_ASSERT_FALSE(doc.containsKey("stop_name_tc"));
     TEST_ASSERT_FALSE(doc.containsKey("refresh_seconds"));
     TEST_ASSERT_EQUAL_STRING("zh-HK", doc["ui_locale"].as<const char*>());
+    TEST_ASSERT_EQUAL_STRING("noto_sans",
+                             doc["display_font"].as<const char*>());
 }
 
 void test_maximum_valid_config_stays_within_capacity_headroom() {
@@ -441,6 +469,7 @@ void test_portal_get_redacts_password_and_round_trips_twelve_slots() {
     TEST_ASSERT_EQUAL_UINT16(8 * 60, doc["scheduled_wake_start_minutes"].as<uint16_t>());
     TEST_ASSERT_EQUAL_UINT16(9 * 60, doc["scheduled_wake_end_minutes"].as<uint16_t>());
     TEST_ASSERT_EQUAL_STRING("en-GB", doc["ui_locale"].as<const char*>());
+    TEST_ASSERT_EQUAL_STRING("unifont", doc["display_font"].as<const char*>());
     TEST_ASSERT_EQUAL_STRING("Europe/London",
                              doc["time_zone"].as<const char*>());
     TEST_ASSERT_EQUAL(std::string::npos, json.find("never-return-this"));
@@ -621,6 +650,7 @@ int main(int, char**) {
     RUN_TEST(test_v3_round_trip_uses_exact_active_payloads);
     RUN_TEST(test_v2_four_slot_config_migrates_and_defaults_to_traditional_chinese);
     RUN_TEST(test_invalid_time_zone_is_rejected_without_mutation);
+    RUN_TEST(test_invalid_display_font_is_rejected_without_mutation);
     RUN_TEST(test_scheduled_wake_rejects_invalid_windows_without_mutation);
     RUN_TEST(test_parse_failures_preserve_the_original_config);
     RUN_TEST(test_legacy_decode_migrates_directly_to_widget_slots);

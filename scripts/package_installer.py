@@ -145,6 +145,10 @@ def copy_legal_material(output_dir: Path) -> Path:
         / "UPSTREAM-NOTICE.md": legal_dir / "NOTO_SANS_CJK_HK_NOTICE.md",
         ROOT / "third_party" / "fonts" / "noto-sans-cjk-hk" / "OFL.txt": licences_dir
         / "Noto-Sans-CJK-HK-OFL-1.1.txt",
+        ROOT / "third_party" / "fonts" / "unifont" / "SOURCE.md": legal_dir
+        / "GNU_UNIFONT_SOURCE.md",
+        ROOT / "third_party" / "fonts" / "unifont" / "OFL-1.1.txt": licences_dir
+        / "GNU-Unifont-OFL-1.1.txt",
         ROOT / "lib" / "yxml" / "LICENSE": licences_dir / "yxml-MIT.txt",
         ROOT / "installer" / "esp-web-tools" / "LICENSE": licences_dir
         / "ESP-Web-Tools-Apache-2.0.txt",

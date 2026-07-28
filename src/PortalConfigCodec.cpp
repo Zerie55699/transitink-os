@@ -71,6 +71,7 @@ bool encodePortalConfig(const DeviceConfig& config,
     DynamicJsonDocument doc(transitink::kConfigJsonCapacity);
     doc["schema_version"] = transitink::kConfigSchemaVersion;
     doc["ui_locale"] = transitink::uiLocaleId(config.uiLocale);
+    doc["display_font"] = transitink::displayFontId(config.displayFont);
     doc["time_zone"] = transitink::deviceTimeZoneId(config.timeZone);
     doc["wifi_ssid"] = config.wifiSsid;
     doc["wifi_password_set"] = config.wifiPassword.length() > 0;

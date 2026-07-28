@@ -2,6 +2,13 @@
 
 All notable user-visible changes to TransitInk OS will be documented here.
 
+## 1.1.3 - 2026-07-28
+
+- Added a display-font setting with Noto Sans as the default and GNU Unifont as
+  an optional native bitmap font.
+- Bundled the pinned GNU Unifont source, licence, provenance, and deterministic
+  generated glyph subset in release packages.
+
 ## 1.1.2 - 2026-07-28
 
 - Fixed a blank e-paper display after installing TransitInk OS over firmware

@@ -66,6 +66,10 @@ void copyCommonFields(const JsonDocument& doc, DeviceConfig& parsed) {
     if (!transitink::parseUiLocaleId(localeId, parsed.uiLocale)) {
         parsed.uiLocale = static_cast<transitink::UiLocale>(0xFF);
     }
+    const std::string displayFontId = asStdString(doc["display_font"]);
+    if (!transitink::parseDisplayFontId(displayFontId, parsed.displayFont)) {
+        parsed.displayFont = static_cast<transitink::DisplayFont>(0xFF);
+    }
     const std::string timeZoneId = asStdString(doc["time_zone"]);
     if (!transitink::parseDeviceTimeZoneId(timeZoneId, parsed.timeZone)) {
         parsed.timeZone =
@@ -267,6 +271,10 @@ bool parseDeviceConfigJson(const String& json, DeviceConfig& config, String& err
         error = "介面語言設定不正確";
         return false;
     }
+    if (!transitink::isDisplayFontSupported(parsed->displayFont)) {
+        error = "顯示字型設定不正確";
+        return false;
+    }
     if (!transitink::isDeviceTimeZoneSupported(parsed->timeZone)) {
         error = "時區設定不正確";
         return false;
@@ -373,6 +381,10 @@ bool serializeDeviceConfigJsonChecked(const DeviceConfig& config,
         error = "介面語言設定不正確";
         return false;
     }
+    if (!transitink::isDisplayFontSupported(config.displayFont)) {
+        error = "顯示字型設定不正確";
+        return false;
+    }
     if (!transitink::isDeviceTimeZoneSupported(config.timeZone)) {
         error = "時區設定不正確";
         return false;
@@ -393,6 +405,7 @@ bool serializeDeviceConfigJsonChecked(const DeviceConfig& config,
     DynamicJsonDocument doc(transitink::kConfigJsonCapacity);
     doc["schema_version"] = transitink::kConfigSchemaVersion;
     doc["ui_locale"] = transitink::uiLocaleId(config.uiLocale);
+    doc["display_font"] = transitink::displayFontId(config.displayFont);
     doc["time_zone"] = transitink::deviceTimeZoneId(config.timeZone);
     doc["wifi_ssid"] = config.wifiSsid;
     doc["wifi_password"] = config.wifiPassword;
@@ -432,6 +445,7 @@ bool serializeDeviceConfigJsonChecked(const DeviceConfig& config,
 bool hasUsableConfig(const DeviceConfig& config) {
     if (config.schemaVersion != transitink::kConfigSchemaVersion || config.wifiSsid.length() == 0 ||
         !transitink::isUiLocaleSupported(config.uiLocale) ||
+        !transitink::isDisplayFontSupported(config.displayFont) ||
         !transitink::isDeviceTimeZoneSupported(config.timeZone) ||
         !areCommonFieldsWithinLimits(config) || !isScheduledWakeValid(config)) {
         return false;
