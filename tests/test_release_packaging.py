@@ -26,7 +26,7 @@ PAGES_SPEC.loader.exec_module(ASSEMBLE_INSTALLER_PAGES)
 
 class ReleasePackagingTests(unittest.TestCase):
     def test_firmware_version_comes_from_product_config(self):
-        self.assertEqual("1.1.1", PACKAGE_INSTALLER.firmware_version())
+        self.assertEqual("1.1.2", PACKAGE_INSTALLER.firmware_version())
 
     def test_merge_preserves_flash_mode_and_matches_factory_image(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -259,7 +259,7 @@ class ReleasePackagingTests(unittest.TestCase):
                 PACKAGE_INSTALLER, "merge_firmware", side_effect=fake_merge
             ):
                 PACKAGE_INSTALLER.package_installer(
-                    build, output, "1.1.1"
+                    build, output, "1.1.2"
                 )
 
             for filename in (
@@ -269,7 +269,7 @@ class ReleasePackagingTests(unittest.TestCase):
                 "devices.json",
                 "manifest.json",
                 "ota-manifest.json",
-                "firmware/transitink-zectrix-note4-ota-v1.1.1.bin",
+                "firmware/transitink-zectrix-note4-ota-v1.1.2.bin",
                 "assets/zectrix-note4-product.png",
                 "esp-web-tools/LICENSE",
                 "esp-web-tools/THIRD_PARTY_NOTICES.md",
@@ -298,12 +298,12 @@ class ReleasePackagingTests(unittest.TestCase):
             ):
                 self.assertTrue((output / filename).is_file(), filename)
 
-            bundle = output / "transitink-zectrix-note4-v1.1.1.zip"
+            bundle = output / "transitink-zectrix-note4-v1.1.2.zip"
             self.assertTrue(bundle.is_file())
             with zipfile.ZipFile(bundle) as archive:
                 names = set(archive.namelist())
-            self.assertIn("transitink-zectrix-note4-v1.1.1.bin", names)
-            self.assertIn("transitink-zectrix-note4-ota-v1.1.1.bin", names)
+            self.assertIn("transitink-zectrix-note4-v1.1.2.bin", names)
+            self.assertIn("transitink-zectrix-note4-ota-v1.1.2.bin", names)
             self.assertIn("ota-manifest.json", names)
             self.assertIn("SHA256SUMS.txt", names)
             self.assertIn("legal/LICENSE.txt", names)

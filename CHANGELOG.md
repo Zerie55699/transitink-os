@@ -2,6 +2,11 @@
 
 All notable user-visible changes to TransitInk OS will be documented here.
 
+## 1.1.2 - 2026-07-28
+
+- Fixed a blank e-paper display after installing TransitInk OS over firmware
+  that left the Zectrix Note 4 display-power GPIO in a held low state.
+
 ## 1.1.1 - 2026-07-27
 
 - Added an on-device firmware update path that downloads a verified release

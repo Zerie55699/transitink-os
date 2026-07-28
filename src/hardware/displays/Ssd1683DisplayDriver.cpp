@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <SPI.h>
+#include <driver/gpio.h>
 
 #include <algorithm>
 
@@ -54,7 +55,11 @@ void Ssd1683DisplayDriver::showPartialRegion(const uint8_t* current,
 void Ssd1683DisplayDriver::powerOn() {
     const DisplayProfile& display = kBoardProfile.display;
     if (isPinConfigured(display.powerPin)) {
+        const gpio_num_t powerPin =
+            static_cast<gpio_num_t>(display.powerPin);
+        gpio_hold_dis(powerPin);
         digitalWrite(display.powerPin, display.powerActiveLevel);
+        gpio_hold_en(powerPin);
         delay(10);
     }
 }
@@ -62,7 +67,11 @@ void Ssd1683DisplayDriver::powerOn() {
 void Ssd1683DisplayDriver::powerOff() {
     const DisplayProfile& display = kBoardProfile.display;
     if (isPinConfigured(display.powerPin)) {
+        const gpio_num_t powerPin =
+            static_cast<gpio_num_t>(display.powerPin);
+        gpio_hold_dis(powerPin);
         digitalWrite(display.powerPin, inactiveLevel(display.powerActiveLevel));
+        gpio_hold_en(powerPin);
     }
 }
 

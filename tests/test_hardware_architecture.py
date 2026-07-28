@@ -55,6 +55,12 @@ class HardwareArchitectureTests(unittest.TestCase):
         self.assertIn("DisplayDriverFor<DisplayDriverKind::Ssd1683>", selector)
         self.assertIn("Ssd1683DisplayDriver::sendCommand", driver)
         self.assertIn("display.busyActiveLevel", driver)
+        power_on = driver.split("void Ssd1683DisplayDriver::powerOn()", 1)[1]
+        power_on = power_on.split("void Ssd1683DisplayDriver::powerOff()", 1)[0]
+        self.assertLess(power_on.index("gpio_hold_dis(powerPin)"),
+                        power_on.index("digitalWrite(display.powerPin"))
+        self.assertLess(power_on.index("digitalWrite(display.powerPin"),
+                        power_on.index("gpio_hold_en(powerPin)"))
 
     def test_battery_monitor_consumes_selected_profile(self):
         monitor = read_text("src/BatteryMonitor.cpp")
