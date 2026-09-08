@@ -59,6 +59,14 @@ class SecurityHardeningTests(unittest.TestCase):
         self.assertIn("attest-build-provenance@", release)
         self.assertIn("permissions: {}", release)
 
+    def test_codeql_actions_use_the_same_commit(self):
+        codeql = read(".github/workflows/codeql.yml")
+        actions = dict(
+            re.findall(r"uses:\s+github/codeql-action/(init|analyze)@([0-9a-f]{40})", codeql)
+        )
+        self.assertEqual({"init", "analyze"}, set(actions))
+        self.assertEqual(actions["init"], actions["analyze"])
+
     def test_codeql_keeps_platformio_dependencies_outside_the_source_root(self):
         codeql = read(".github/workflows/codeql.yml")
         self.assertIn(
