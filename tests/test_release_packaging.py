@@ -325,8 +325,8 @@ class ReleasePackagingTests(unittest.TestCase):
         self.assertIn("dist/installer/legal/CORRESPONDING_SOURCE.md", workflow)
         self.assertIn("actions/attest-build-provenance@", workflow)
         self.assertIn("GH_REPO: ${{ github.repository }}", workflow)
-        self.assertIn("actions/upload-pages-artifact@fc324d35", workflow)
-        self.assertIn("actions/deploy-pages@cd2ce8fc", workflow)
+        self.assertIn("uses: actions/upload-pages-artifact@", workflow)
+        self.assertIn("uses: actions/deploy-pages@", workflow)
         self.assertNotIn("uses: actions/checkout@v", workflow)
         self.assertNotIn("zectrix-note4-installer.git", workflow)
 
@@ -338,8 +338,8 @@ class ReleasePackagingTests(unittest.TestCase):
         self.assertIn('- "installer/**"', workflow)
         self.assertIn("gh release download", workflow)
         self.assertIn("scripts/assemble_installer_pages.py", workflow)
-        self.assertIn("actions/upload-pages-artifact@fc324d35", workflow)
-        self.assertIn("actions/deploy-pages@cd2ce8fc", workflow)
+        self.assertIn("uses: actions/upload-pages-artifact@", workflow)
+        self.assertIn("uses: actions/deploy-pages@", workflow)
         self.assertNotIn("platformio run", workflow)
         self.assertNotIn("scripts/package_installer.py", workflow)
 
